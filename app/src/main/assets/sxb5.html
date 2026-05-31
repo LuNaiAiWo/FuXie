@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>分級靈敏度硬體分離演算板 - 修復版</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            overscroll-behavior: none;
+            background: transparent !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        #app {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            background: transparent !important;
+        }
+
+        /* 懸浮膠囊工具欄 */
+        .toolbar {
+            position: absolute;
+            top: env(safe-area-inset-top, 16px);
+            left: 16px;
+            right: 16px;
+            margin: 0 auto;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 16px;
+            align-items: center;
+            z-index: 999;
+            overflow-x: auto;
+            scrollbar-width: none;
+            touch-action: pan-x;
+        }
+
+        .toolbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+            padding-right: 12px;
+            border-right: 1px solid rgba(0,0,0,0.08);
+            position: relative;
+        }
+
+        .group:last-child {
+            border-right: none;
+            padding-right: 0;
+        }
+
+        .drag-handle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 32px;
+            color: #94a3b8;
+            cursor: grab;
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: -1px;
+            padding-right: 4px;
+            touch-action: none;
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+            color: #2563eb;
+        }
+
+        .group.dragging {
+            opacity: 0.3;
+            transform: scale(0.96);
+            background: rgba(37, 99, 235, 0.08);
+            border-radius: 8px;
+        }
+
+        button {
+            border: none;
+            background: #eef1f5;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #2563eb;
+            cursor: pointer;
+            text-align: center;
+            white-space: nowrap;
+            transition: all 0.15s ease;
+        }
+
+        button.active {
+            background: #2563eb;
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        .color {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+            transition: transform 0.1s;
+        }
+
+        .color.active {
+            transform: scale(1.15);
+            outline: 2px solid #2563eb;
+            outline-offset: 1px;
+        }
+
+        .range-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #eef1f5;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+            flex-shrink: 0;
+        }
+
+        input[type=range] {
+            accent-color: #2563eb;
+            height: 4px;
+        }
+
+        #canvasWrap {
+            background: transparent !important;
+            flex: 1;
+            z-index: 10;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            touch-action: none;
+        }
+    </style>
+</head>
+
+<body>
+<div id="app">
+    <div class="toolbar">
+        <div class="group" id="group-modes">
+            <div class="drag-handle">⋮</div>
+            <button id="penBtn" class="active">🖊 画笔</button>
+            <button id="eraserBtn">🧽 擦除</button>
+        </div>
+
+        <div class="group" id="group-colors">
+            <div class="drag-handle">⋮</div>
+            <div class="color active" data-color="#000000" style="background:#000"></div>
+            <div class="color" data-color="#ef4444" style="background:#ef4444"></div>
+            <div class="color" data-color="#2563eb" style="background:#2563eb"></div>
+            <div class="color" data-color="#16a34a" style="background:#16a34a"></div>
+            <div class="color" data-color="#eab308" style="background:#eab308"></div>
+            <div class="color" data-color="#ffffff" style="background:#ffffff; border: 2px solid #ddd;"></div>
+        </div>
+
+        <div class="group range-wrap" id="group-sizes">
+            <div class="drag-handle">⋮</div>
+            <span>大小</span>
+            <input id="sizeSlider" type="range" min="4" max="20" step="4" value="4" />
+            <span id="sizeText" style="min-width: 36px;">4 px</span>
+        </div>
+
+        <div class="group" id="group-history">
+            <div class="drag-handle">⋮</div>
+            <button id="undoBtn">↩️ 撤销</button>
+            <button id="redoBtn">↪️ 恢复</button>
+            <button id="centerBtn">🎯 居中</button>
+            <button id="clearBtn" style="color: #64748b;">🗑 清空</button>
+        </div>
+
+        <div class="group" style="border-right: none;">
+            <button id="minimizeBtn" style="background: #f59e0b; color: #fff;">➖ 最小化</button>
+            <button id="closeBtn" style="background: #ef4444; color: #fff;">❌ 退出</button>
+        </div>
+    </div>
+
+    <div id="canvasWrap">
+        <canvas id="canvas"></canvas>
+    </div>
+</div>
+
+<script>
+    (() => {
+        const DPR = Math.min(window.devicePixelRatio || 1, 2);
+        const MIN_SCALE = 0.2;
+        const MAX_SCALE = 8;
+        const TOUCH_START_THRESHOLD = 12;
+
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d", { alpha: true });
+
+        const penBtn = document.getElementById("penBtn");
+        const eraserBtn = document.getElementById("eraserBtn");
+        const undoBtn = document.getElementById("undoBtn");
+        const redoBtn = document.getElementById("redoBtn");
+        const clearBtn = document.getElementById("clearBtn");
+        const centerBtn = document.getElementById("centerBtn");
+        const sizeSlider = document.getElementById("sizeSlider");
+        const sizeText = document.getElementById("sizeText");
+
+        let strokes = [];
+        let undoStack = [];
+        let redoStack = [];
+
+        let currentStroke = null;
+        let mode = "pen";
+        let currentColor = "#000000";
+        let currentSize = 4;
+        let eraserCursor = null;
+
+        let scale = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        let pointers = new Map();
+        let isDrawing = false;
+        let touchStartPoint = null;
+
+        let pinchStartDist = 0;
+        let pinchStartScale = 1;
+        let pinchStartCenter = { x: 0, y: 0 };
+        let pinchStartOffset = { x: 0, y: 0 };
+
+        // 膠囊工具欄拖拽邏輯变量
+        const toolbar = document.querySelector('.toolbar');
+        let draggingGroup = null;
+
+        function resizeCanvas() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            if (width <= 0 || height <= 0) return; // 💡 防御：防止后台切换时产生的 0 尺寸破坏布局
+            canvas.width = width * DPR;
+            canvas.height = height * DPR;
+            canvas.style.width = width + "px";
+            canvas.style.height = height + "px";
+            requestRender();
+        }
+        window.resizeCanvas = resizeCanvas;
+
+        // 💡【核心重置防护】：强行斩断一切多线程/异步引起的未释放触摸状态
+        function forceResetAllStates() {
+            isDrawing = false;
+            touchStartPoint = null;
+            eraserCursor = null;
+            currentStroke = null;
+            pointers.clear();
+
+            if (draggingGroup) {
+                draggingGroup.classList.remove('dragging');
+                draggingGroup = null;
+            }
+            requestRender();
+        }
+
+        window.onAppMaximized = () => {
+            console.log("[Native->Web] 恢复前台，清理冗余状态并延迟重绘");
+            forceResetAllStates();
+            // 💡 延迟 60ms 等待 Android 视口动画完全伸展，防止读取错误的宽高
+            setTimeout(resizeCanvas, 60);
+        };
+
+        window.onNativeBallTextureSynced = (base64Data) => {
+            console.log("[Native->Web] 懸浮球圖案已同步");
+        };
+
+        function screenToWorld(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (clientX - rect.left - offsetX) / scale,
+                y: (clientY - rect.top - offsetY) / scale,
+            };
+        }
+
+        function drawStroke(ctx, stroke) {
+            if (!stroke || !stroke.points || stroke.points.length === 0) return;
+            ctx.save();
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.strokeStyle = stroke.color;
+            ctx.lineWidth = stroke.size;
+
+            if (stroke.color.toLowerCase() === "#ffffff") {
+                ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+                ctx.shadowBlur = 4;
+            }
+
+            ctx.beginPath();
+            if (stroke.points.length === 1) {
+                const p = stroke.points[0];
+                ctx.arc(p.x, p.y, stroke.size / 2, 0, Math.PI * 2);
+                ctx.fillStyle = stroke.color;
+                ctx.fill();
+                ctx.restore();
+                return;
+            }
+
+            ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+            let i;
+            for (i = 1; i < stroke.points.length - 1; i++) {
+                const xc = (stroke.points[i].x + stroke.points[i + 1].x) / 2;
+                const yc = (stroke.points[i].y + stroke.points[i + 1].y) / 2;
+                ctx.quadraticCurveTo(stroke.points[i].x, stroke.points[i].y, xc, yc);
+            }
+            ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function pointToLineDistance(px, py, x1, y1, x2, y2) {
+            const A = px - x1, B = py - y1, C = x2 - x1, D = y2 - y1;
+            const dot = A * C + B * D;
+            const lenSq = C * C + D * D;
+            let param = -1;
+            if (lenSq !== 0) param = dot / lenSq;
+            let xx, yy;
+            if (param < 0) { xx = x1; yy = y1; }
+            else if (param > 1) { xx = x2; yy = y2; }
+            else { xx = x1 + param * C; yy = y1 + param * D; }
+            return Math.hypot(px - xx, py - yy);
+        }
+
+        function eraseStrokesAt(worldPoint) {
+            const eraserRadius = (currentSize * 1.5) / scale;
+            let changed = false;
+
+            for (let i = strokes.length - 1; i >= 0; i--) {
+                const stroke = strokes[i];
+                if (stroke.points.length === 0) continue;
+
+                const xs = stroke.points.map(p => p.x);
+                const ys = stroke.points.map(p => p.y);
+                if (worldPoint.x < Math.min(...xs) - eraserRadius || worldPoint.x > Math.max(...xs) + eraserRadius ||
+                    worldPoint.y < Math.min(...ys) - eraserRadius || worldPoint.y > Math.max(...ys) + eraserRadius) {
+                    continue;
+                }
+
+                for (let j = 0; j < stroke.points.length - 1; j++) {
+                    if (pointToLineDistance(worldPoint.x, worldPoint.y, stroke.points[j].x, stroke.points[j].y, stroke.points[j+1].x, stroke.points[j+1].y) <= eraserRadius) {
+                        const removed = strokes.splice(i, 1)[0];
+                        undoStack.push({ type: "erase", stroke: removed, index: i });
+                        redoStack = [];
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+            if (changed) requestRender();
+        }
+
+        let renderPending = false;
+        function requestRender() {
+            if (renderPending) return;
+            renderPending = true;
+            requestAnimationFrame(() => { renderPending = false; render(); });
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.scale(DPR, DPR);
+            ctx.translate(offsetX, offsetY);
+            ctx.scale(scale, scale);
+
+            for (const s of strokes) drawStroke(ctx, s);
+            if (currentStroke) drawStroke(ctx, currentStroke);
+
+            if (mode === "eraser" && eraserCursor) {
+                ctx.save();
+                ctx.beginPath();
+                const eraserRadius = (currentSize * 1.5) / scale;
+                ctx.arc(eraserCursor.x, eraserCursor.y, eraserRadius, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(148, 163, 184, 0.35)";
+                ctx.fill();
+                ctx.lineWidth = 1.2 / scale;
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+                ctx.stroke();
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+
+        function finishStroke() {
+            if (!currentStroke) return;
+            strokes.push(currentStroke);
+            undoStack.push({ type: "add", stroke: currentStroke });
+            redoStack = [];
+            currentStroke = null;
+            requestRender();
+        }
+
+        function onPointerDown(e) {
+            pointers.set(e.pointerId, e);
+
+            if (e.pointerType === "pen") {
+                // 💡 加上 try-catch 防御：防止快速后台切换导致的 DOMException 指针失效
+                try { canvas.setPointerCapture(e.pointerId); } catch(_) {}
+                const world = screenToWorld(e.clientX, e.clientY);
+                isDrawing = true;
+                touchStartPoint = null;
+
+                if (mode === "eraser") {
+                    eraserCursor = world;
+                    eraseStrokesAt(world);
+                } else {
+                    currentStroke = { type: "pen", color: currentColor, size: currentSize, points: [world] };
+                    requestRender();
+                }
+                return;
+            }
+
+            if (e.pointerType === "touch") {
+                const touchPointers = [...pointers.values()].filter(p => p.pointerType === "touch");
+
+                if (touchPointers.length >= 2) {
+                    if (isDrawing && currentStroke) { finishStroke(); }
+                    isDrawing = false;
+                    touchStartPoint = null;
+                    eraserCursor = null;
+
+                    const pts = touchPointers;
+                    pinchStartDist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
+                    pinchStartScale = scale;
+                    pinchStartCenter = { x: (pts[0].clientX + pts[1].clientX) / 2, y: (pts[0].clientY + pts[1].clientY) / 2 };
+                    pinchStartOffset = { x: offsetX, y: offsetY };
+                } else {
+                    isDrawing = false;
+                    touchStartPoint = { clientX: e.clientX, clientY: e.clientY };
+                }
+            }
+        }
+
+        function onPointerMove(e) {
+            if (!pointers.has(e.pointerId)) return;
+            pointers.set(e.pointerId, e);
+
+            if (e.pointerType === "pen" && isDrawing) {
+                const world = screenToWorld(e.clientX, e.clientY);
+                if (mode === "eraser") {
+                    eraserCursor = world;
+                    eraseStrokesAt(world);
+                    requestRender();
+                } else if (currentStroke) {
+                    const last = currentStroke.points[currentStroke.points.length - 1];
+                    if (Math.hypot(world.x - last.x, world.y - last.y) < 1.5) return;
+                    currentStroke.points.push(world);
+                    requestRender();
+                }
+                return;
+            }
+
+            const touchPointers = [...pointers.values()].filter(p => p.pointerType === "touch");
+            if (touchPointers.length >= 2) {
+                const pts = touchPointers;
+                const dist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
+                let newScale = pinchStartScale * (dist / (pinchStartDist || 1));
+                newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
+
+                const currentCenter = { x: (pts[0].clientX + pts[1].clientX) / 2, y: (pts[0].clientY + pts[1].clientY) / 2 };
+                const rect = canvas.getBoundingClientRect();
+                const originTransformX = (pinchStartCenter.x - rect.left - pinchStartOffset.x) / pinchStartScale;
+                const originTransformY = (pinchStartCenter.y - rect.top - pinchStartOffset.y) / pinchStartScale;
+
+                scale = newScale;
+                offsetX = (currentCenter.x - rect.left) - originTransformX * scale;
+                offsetY = (currentCenter.y - rect.top) - originTransformY * scale;
+                requestRender();
+                return;
+            }
+
+            if (e.pointerType === "touch" && touchPointers.length === 1) {
+                if (isDrawing) {
+                    const world = screenToWorld(e.clientX, e.clientY);
+                    if (mode === "eraser") {
+                        eraserCursor = world;
+                        eraseStrokesAt(world);
+                        requestRender();
+                    } else if (currentStroke) {
+                        const last = currentStroke.points[currentStroke.points.length - 1];
+                        if (Math.hypot(world.x - last.x, world.y - last.y) < 1.5) return;
+                        currentStroke.points.push(world);
+                        requestRender();
+                    }
+                }
+                else if (touchStartPoint) {
+                    const moveDist = Math.hypot(e.clientX - touchStartPoint.clientX, e.clientY - touchStartPoint.clientY);
+
+                    if (moveDist >= TOUCH_START_THRESHOLD) {
+                        // 💡 try-catch 防御
+                        try { canvas.setPointerCapture(e.pointerId); } catch(_) {}
+                        isDrawing = true;
+
+                        const startWorld = screenToWorld(touchStartPoint.clientX, touchStartPoint.clientY);
+                        const currentWorld = screenToWorld(e.clientX, e.clientY);
+
+                        if (mode === "eraser") {
+                            eraserCursor = currentWorld;
+                            eraseStrokesAt(currentWorld);
+                        } else {
+                            currentStroke = {
+                                type: "pen",
+                                color: currentColor,
+                                size: currentSize,
+                                points: [startWorld, currentWorld]
+                            };
+                        }
+                        touchStartPoint = null;
+                        requestRender();
+                    }
+                }
+            }
+        }
+
+        function onPointerUp(e) {
+            if (pointers.has(e.pointerId)) {
+                try { canvas.releasePointerCapture(e.pointerId); } catch(err){}
+                pointers.delete(e.pointerId);
+            }
+            if (isDrawing) {
+                finishStroke();
+            }
+            isDrawing = false;
+            touchStartPoint = null;
+            eraserCursor = null;
+            requestRender();
+        }
+
+        function undo() {
+            if (undoStack.length === 0) return;
+            const action = undoStack.pop();
+            redoStack.push(action);
+
+            if (action.type === "add") {
+                strokes.pop();
+            } else if (action.type === "erase") {
+                strokes.splice(action.index, 0, action.stroke);
+            } else if (action.type === "clear") {
+                strokes = [...action.oldStrokes];
+            }
+            requestRender();
+        }
+
+        function redo() {
+            if (redoStack.length === 0) return;
+            const action = redoStack.pop();
+            undoStack.push(action);
+
+            if (action.type === "add") {
+                strokes.push(action.stroke);
+            } else if (action.type === "erase") {
+                strokes.splice(action.index, 1);
+            } else if (action.type === "clear") {
+                strokes = [];
+            }
+            requestRender();
+        }
+
+        function centerView() { scale = 1; offsetX = 0; offsetY = 0; requestRender(); }
+
+        function clearAll() {
+            if (strokes.length === 0) return;
+            undoStack.push({ type: "clear", oldStrokes: [...strokes] });
+            redoStack = [];
+            strokes = [];
+            requestRender();
+        }
+
+        penBtn.onclick = () => { mode = "pen"; penBtn.classList.add("active"); eraserBtn.classList.remove("active"); };
+        eraserBtn.onclick = () => { mode = "eraser"; eraserBtn.classList.add("active"); penBtn.classList.remove("active"); };
+
+        document.querySelectorAll(".color").forEach((el) => {
+            el.onclick = () => {
+                document.querySelectorAll(".color").forEach((c) => c.classList.remove("active"));
+                el.classList.add("active");
+                currentColor = el.dataset.color;
+                mode = "pen";
+                penBtn.classList.add("active"); eraserBtn.classList.remove("active");
+            };
+        });
+
+        sizeSlider.oninput = (e) => { currentSize = parseInt(e.target.value); sizeText.innerText = currentSize + " px"; };
+        undoBtn.onclick = undo; redoBtn.onclick = redo; clearBtn.onclick = clearAll; centerBtn.onclick = centerView;
+
+        document.getElementById("minimizeBtn").onclick = () => {
+            forceResetAllStates(); // 💡 最小化前强行清理所有高频事件流
+            if (window.AndroidBridge) window.AndroidBridge.minimizeApp(true);
+        };
+        document.getElementById("closeBtn").onclick = () => { if (window.AndroidBridge) window.AndroidBridge.closeApp(); };
+
+        // 膠囊工具欄拖拽邏輯
+        toolbar.querySelectorAll('.group[id]').forEach(group => {
+            const handle = group.querySelector('.drag-handle');
+
+            handle.addEventListener('touchstart', (e) => {
+                if (e.target.tagName.toLowerCase() === 'input') return;
+                draggingGroup = group;
+                group.classList.add('dragging');
+            }, { passive: true });
+
+            handle.addEventListener('touchmove', (e) => {
+                if (!draggingGroup) return;
+                const touch = e.touches[0];
+                const targetNode = document.elementFromPoint(touch.clientX, touch.clientY);
+                if (!targetNode) return;
+
+                const targetGroup = targetNode.closest('.group[id]');
+                if (targetGroup && targetGroup !== draggingGroup) {
+                    const box = targetGroup.getBoundingClientRect();
+                    const nextSibling = (touch.clientX < box.left + box.width / 2) ? targetGroup : targetGroup.nextElementSibling;
+
+                    if (nextSibling !== draggingGroup) {
+                        toolbar.insertBefore(draggingGroup, nextSibling);
+                    }
+                }
+            }, { passive: true });
+
+            const endDrag = () => {
+                if (!draggingGroup) return;
+                draggingGroup.classList.remove('dragging');
+                draggingGroup = null;
+
+                const newOrder = [...toolbar.querySelectorAll('.group')].map(el => el.id).filter(id => id);
+                localStorage.setItem('toolbar_groups_order', JSON.stringify(newOrder));
+            };
+
+            handle.addEventListener('touchend', endDrag);
+            handle.addEventListener('touchcancel', endDrag);
+        });
+
+        const savedOrder = localStorage.getItem('toolbar_groups_order');
+        if (savedOrder) {
+            JSON.parse(savedOrder).forEach(id => {
+                const node = document.getElementById(id);
+                if (node) toolbar.appendChild(node);
+            });
+            const controlGroup = toolbar.querySelector('.group:not([id])');
+            if (controlGroup) toolbar.appendChild(controlGroup);
+        }
+
+        canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
+        canvas.addEventListener("pointermove", onPointerMove, { passive: false });
+        canvas.addEventListener("pointerup", onPointerUp, { passive: false });
+        canvas.addEventListener("pointercancel", onPointerUp, { passive: false });
+
+        // 💡 额外生命周期守卫：原生切后台系统通知时强制洗牌状态
+        window.addEventListener("blur", forceResetAllStates);
+        document.addEventListener("visibilitychange", () => { if (document.hidden) forceResetAllStates(); });
+        window.addEventListener("resize", resizeCanvas);
+
+        resizeCanvas();
+        centerView();
+    })();
+</script>
+</body>
+</html>

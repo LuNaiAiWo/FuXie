@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>双沙盒智能手写板</title>
-
     <style>
         * {
             box-sizing: border-box;
@@ -14,14 +13,12 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        html,
-        body {
+        html, body {
             width: 100%;
             height: 100%;
             overflow: hidden;
-            overscroll-behavior: none;
-            background: transparent !important;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
         }
 
         #app {
@@ -29,31 +26,26 @@
             inset: 0;
             display: flex;
             flex-direction: column;
-            background: transparent !important;
         }
 
-        /* 工具栏基础样式：将工具栏底色直接锁死为纯白色（实色），去除了毛玻璃半透明 */
         .toolbar {
             position: absolute;
             top: env(safe-area-inset-top, 16px);
             left: 16px;
             right: 16px;
-            margin: 0 auto;
             padding: 10px 16px;
-            background: #FFFFFF !important;
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            border-top: 1.5px solid rgba(0, 0, 0, 0.04);
+            background: #FFF;
+            border: 1px solid rgba(0,0,0,0.08);
             border-radius: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05),
-                0 20px 40px -5px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 20px 40px -5px rgba(0,0,0,0.12);
             display: flex;
-            flex-wrap: nowrap;
             gap: 16px;
             align-items: center;
             z-index: 999;
             overflow-x: auto;
             scrollbar-width: none;
             touch-action: pan-x;
+            -webkit-overflow-scrolling: touch;
         }
 
         .toolbar::-webkit-scrollbar {
@@ -66,8 +58,8 @@
             gap: 8px;
             flex-shrink: 0;
             padding-right: 12px;
-            border-right: 1px solid rgba(0, 0, 0, 0.06);
-            position: relative;
+            border-right: 1px solid rgba(0,0,0,0.06);
+            transition: all 0.2s ease;
         }
 
         .group:last-child {
@@ -75,18 +67,25 @@
             padding-right: 0;
         }
 
+        .group.dragging {
+            opacity: 0.6;
+            transform: scale(0.98) rotateZ(-2deg);
+            box-shadow: 0 8px 16px rgba(37,99,235,0.2);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin: 0 4px;
+        }
+
         .drag-handle {
+            width: 16px;
+            height: 32px;
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 16px;
-            height: 32px;
             color: #94a3b8;
             cursor: grab;
             font-size: 16px;
             font-weight: bold;
-            letter-spacing: -1px;
-            padding-right: 4px;
             touch-action: none;
             transition: color 0.2s;
         }
@@ -96,277 +95,210 @@
             color: #2563eb;
         }
 
-        .group.dragging {
-            opacity: 0.3;
-            transform: scale(0.96);
-            background: rgba(37, 99, 235, 0.08);
-            border-radius: 8px;
-        }
-
         button {
             border: none;
-            background: rgba(0, 0, 0, 0.04);
+            background: rgba(0,0,0,0.04);
             padding: 8px 16px;
             border-radius: 999px;
             font-size: 14px;
             font-weight: 600;
             color: #334155;
             cursor: pointer;
-            text-align: center;
-            white-space: nowrap;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
         }
 
-        button.active {
+        button.active, button:hover {
             background: #2563eb;
             color: #fff;
-            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+            box-shadow: 0 4px 14px rgba(37,99,235,0.4);
         }
 
         button:active {
             transform: scale(0.92);
-            filter: brightness(0.95);
         }
 
         .color {
             width: 28px;
             height: 28px;
             border-radius: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.8);
+            border: 2px solid rgba(255,255,255,0.8);
             cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s, outline 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.3s, outline 0.2s;
             flex-shrink: 0;
         }
 
         .color.active {
             transform: scale(1.2);
             outline: 2px solid #2563eb;
-            outline-offset: 3px;
+            outline-offset: 2px;
         }
 
-        /* ========== 弹出式大小选择面板 ========== */
         .size-popup {
             position: fixed;
             z-index: 1001;
-            background: #FFFFFF;
+            background: #FFF;
             border-radius: 16px;
-            padding: 14px 18px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.06);
+            padding: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            min-width: 200px;
+            gap: 12px;
+            min-width: 220px;
             opacity: 0;
-            transform: translateY(-8px);
+            transform: scale(0.9) translateY(-8px);
             pointer-events: none;
-            transition: opacity 0.22s cubic-bezier(0.25, 1, 0.5, 1),
-                transform 0.22s cubic-bezier(0.25, 1, 0.5, 1);
-            border: 1px solid rgba(0, 0, 0, 0.06);
+            transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+            border: 1px solid rgba(0,0,0,0.06);
         }
 
         .size-popup.visible {
             opacity: 1;
-            transform: translateY(0);
+            transform: scale(1) translateY(0);
             pointer-events: auto;
         }
 
-        .size-popup-header {
+        .size-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 10px;
         }
 
-        .size-popup-label {
+        .size-label {
             font-size: 13px;
             font-weight: 600;
             color: #64748b;
-            letter-spacing: 0.3px;
-            white-space: nowrap;
         }
 
-        .size-popup-value {
-            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-            font-size: 16px;
+        .size-value {
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
             font-weight: 700;
             color: #2563eb;
-            white-space: nowrap;
-            min-width: 36px;
+            min-width: 40px;
             text-align: right;
         }
 
-        .size-popup-value .unit {
-            font-size: 11px;
-            font-weight: 600;
-            color: #2563eb;
-            margin-left: 1px;
-        }
-
-        .size-popup-slider-container {
-            display: flex;
-            align-items: center;
-            width: 100%;
-        }
-
-        /* 弹出面板中的短滑块 */
-        #popupSizeSlider {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 100%;
-            height: 5px;
-            background: rgba(37, 99, 235, 0.13);
-            border-radius: 999px;
-            outline: none;
-            cursor: pointer;
-        }
-
-        #popupSizeSlider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #2563eb;
-            box-shadow: 0 2px 10px rgba(37, 99, 235, 0.35);
-            transition: transform 0.12s;
-            cursor: pointer;
-        }
-
-        #popupSizeSlider::-webkit-slider-thumb:active {
-            transform: scale(1.25);
-        }
-
-        .size-popup-presets {
-            display: flex;
-            gap: 6px;
-            justify-content: space-between;
-        }
-
-        .size-preset-dot {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            background: rgba(37, 99, 235, 0.07);
+        .size-display {
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-            font-size: 10px;
-            font-weight: 700;
-            color: #64748b;
-            border: 2px solid transparent;
-            flex-shrink: 0;
+            height: 60px;
+            background: rgba(37,99,235,0.08);
+            border-radius: 12px;
         }
 
-        .size-preset-dot.active-preset {
+        .size-preview {
+            width: 32px;
+            height: 32px;
             background: #2563eb;
-            color: #fff;
-            border-color: #2563eb;
-            box-shadow: 0 3px 12px rgba(37, 99, 235, 0.35);
-            transform: scale(1.08);
+            border-radius: 50%;
+            transition: all 0.15s;
+            box-shadow: 0 4px 12px rgba(37,99,235,0.3);
         }
 
-        .size-preset-dot:active {
-            transform: scale(0.9);
-            filter: brightness(0.9);
+        .size-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(37,99,235,0.13);
+            border-radius: 999px;
+            cursor: pointer;
         }
 
-        /* 小三角指示器 */
-        .size-popup::before {
-            content: '';
-            position: absolute;
-            top: -7px;
-            left: 30px;
-            width: 14px;
-            height: 14px;
-            background: #FFFFFF;
-            transform: rotate(45deg);
-            border-left: 1px solid rgba(0, 0, 0, 0.06);
-            border-top: 1px solid rgba(0, 0, 0, 0.06);
-            border-radius: 2px;
+        .size-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #2563eb;
+            box-shadow: 0 2px 8px rgba(37,99,235,0.4);
+            cursor: pointer;
         }
 
-        /* 💡 核心调整：主容器由左右排列调整为上下纵向排列 */
+        .size-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #2563eb;
+            border: none;
+            box-shadow: 0 2px 8px rgba(37,99,235,0.4);
+            cursor: pointer;
+        }
+
         .main-container {
             display: flex;
-            flex-direction: column; /* 纵向切分上下分屏 */
+            flex-direction: column;
             width: 100vw;
             height: 100vh;
-            background: transparent !important;
             z-index: 10;
-            position: relative;
         }
 
-        /* 💡 核心调整：视口宽度拉满，高度由 JS 分配比例支配 */
         .zone-viewport {
             width: 100%;
             position: relative;
             overflow: hidden;
-            background: transparent !important;
-            box-sizing: border-box;
-            transition: box-shadow 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+            transition: box-shadow 0.4s;
         }
 
-        /* 💡 核心调整：激活态内阴影方向适配上下分屏 */
         #zone-a.active {
-            box-shadow: inset 0 -20px 40px -15px rgba(37, 99, 235, 0.05);
+            box-shadow: inset 0 -20px 40px -15px rgba(37,99,235,0.05);
         }
 
         #zone-b.active {
-            box-shadow: inset 0 20px 40px -15px rgba(37, 99, 235, 0.05);
+            box-shadow: inset 0 20px 40px -15px rgba(37,99,235,0.05);
         }
 
-        /* 💡 核心调整：分屏调节条从竖拉杆重组为横向拉杆 */
         .resizer-bar {
             width: 100%;
-            height: 32px; /* 增大高度轴作为物理触控热区 */
-            margin: -16px 0; /* 上下内缩以完美居中 */
+            height: 32px;
+            margin: -16px 0;
             z-index: 100;
-            cursor: row-resize; /* 鼠标样式变为上下调节 */
+            cursor: row-resize;
             background: transparent;
-            position: relative;
-            flex-shrink: 0;
-            touch-action: none;
             display: flex;
             justify-content: center;
             align-items: center;
+            touch-action: none;
         }
 
-        /* 💡 核心调整：内部装饰胶囊结构改为扁平横向 */
         .resizer-bar::after {
             content: '';
             width: 48px;
             height: 4px;
-            background: rgba(37, 99, 235, 0.5);
+            background: rgba(37,99,235,0.5);
             border-radius: 999px;
-            transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+            transition: all 0.25s;
         }
 
-        /* 💡 核心调整：横向拉杆激活拖拽态的高亮发光行为适配 */
         .resizer-bar.active-drag::after {
             width: 120px;
             height: 8px;
             background: #2563eb;
-            box-shadow: 0 0 16px rgba(37, 99, 235, 0.8);
+            box-shadow: 0 0 16px rgba(37,99,235,0.8);
         }
 
         .smart-mask {
             position: absolute;
             inset: 0;
-            z-index: 1;
-            backdrop-filter: contrast(85%) brightness(100%) saturate(110%);
-            -webkit-backdrop-filter: contrast(85%) brightness(100%) saturate(110%);
-            background-color: rgba(255, 255, 255, 0.12);
+            z-index: 5;
+            backdrop-filter: contrast(90%) brightness(88%);
+            -webkit-backdrop-filter: contrast(90%) brightness(88%);
+            background: rgba(0,0,0,0.05);
             pointer-events: none;
+            transition: opacity 0.25s;
+            opacity: 1;
+        }
+
+        .zone-viewport.active .smart-mask {
+            opacity: 0;
         }
 
         .canvas-wrapper {
             position: absolute;
             inset: 0;
-            width: 100%;
-            height: 100%;
             z-index: 2;
         }
 
@@ -377,30 +309,22 @@
             touch-action: none;
         }
 
-        /* 响应式：窄屏下弹出面板略窄 */
         @media (max-width: 420px) {
             .size-popup {
-                min-width: 170px;
-                padding: 12px 14px;
-                gap: 8px;
-                border-radius: 14px;
+                min-width: 180px;
+                padding: 14px;
+                gap: 10px;
             }
-            .size-popup::before {
-                left: 22px;
+            .size-display {
+                height: 50px;
             }
-            .size-preset-dot {
-                width: 24px;
-                height: 24px;
-                font-size: 9px;
-            }
-            #popupSizeSlider::-webkit-slider-thumb {
-                width: 16px;
-                height: 16px;
+            .size-preview {
+                width: 28px;
+                height: 28px;
             }
         }
     </style>
 </head>
-
 <body>
 <div id="app">
     <div class="toolbar" id="mainToolbar">
@@ -412,12 +336,13 @@
 
         <div class="group" id="group-colors">
             <div class="drag-handle">⋮</div>
+            <button id="sizeBtn">🖌 笔刷</button>
             <div class="color active" data-color="#000000" style="background:#000"></div>
             <div class="color" data-color="#ef4444" style="background:#ef4444"></div>
             <div class="color" data-color="#2563eb" style="background:#2563eb"></div>
             <div class="color" data-color="#16a34a" style="background:#16a34a"></div>
             <div class="color" data-color="#eab308" style="background:#eab308"></div>
-            <div class="color" data-color="#ffffff" style="background:#ffffff; border: 2px solid #ddd;"></div>
+            <div class="color" data-color="#ffffff" style="background:#fff; border: 2px solid #ddd;"></div>
         </div>
 
         <div class="group" id="group-history">
@@ -425,7 +350,7 @@
             <button id="undoBtn">↩️ 撤销</button>
             <button id="redoBtn">↪️ 恢复</button>
             <button id="centerBtn">🎯 居中</button>
-            <button id="clearBtn" style="color: #64748b;">🗑 清空</button>
+            <button id="clearBtn">🗑 清空</button>
         </div>
 
         <div class="group" id="group-controls" style="border-right: none; padding-right: 0;">
@@ -436,731 +361,597 @@
     </div>
 
     <div class="size-popup" id="sizePopup">
-        <div class="size-popup-header">
-            <label class="size-popup-label" for="popupSizeSlider">🖌 画笔大小</label>
-            <span class="size-popup-value">
-                <span id="popupSizeNum">2</span><span class="unit">px</span>
-            </span>
+        <div class="size-header">
+            <span class="size-label">🖌 笔刷大小</span>
+            <span class="size-value"><span id="sizeNum">2</span>px</span>
         </div>
-        <div class="size-popup-slider-container">
-            <input type="range" id="popupSizeSlider" min="0" max="3" value="0" step="1" />
+        <div class="size-display">
+            <div class="size-preview" id="sizePreview"></div>
         </div>
-        <div class="size-popup-presets" id="sizePresets">
-            <div class="size-preset-dot active-preset" data-size-index="0">2</div>
-            <div class="size-preset-dot" data-size-index="1">4</div>
-            <div class="size-preset-dot" data-size-index="2">8</div>
-            <div class="size-preset-dot" data-size-index="3">16</div>
-        </div>
+        <input type="range" class="size-slider" id="sizeSlider" min="0" max="3" value="0" step="1" />
     </div>
 
     <div class="main-container" id="mainContainer">
         <div id="zone-a" class="zone-viewport active" onpointerdown="switchActiveZone('a')">
             <div class="smart-mask"></div>
-            <div class="canvas-wrapper" id="wrapper-a">
-                <canvas id="canvas-a"></canvas>
-            </div>
+            <div class="canvas-wrapper"><canvas id="canvas-a"></canvas></div>
         </div>
 
         <div class="resizer-bar" id="resizerBar"></div>
 
         <div id="zone-b" class="zone-viewport" onpointerdown="switchActiveZone('b')">
             <div class="smart-mask"></div>
-            <div class="canvas-wrapper" id="wrapper-b">
-                <canvas id="canvas-b"></canvas>
-            </div>
+            <div class="canvas-wrapper"><canvas id="canvas-b"></canvas></div>
         </div>
     </div>
 </div>
 
 <script>
-    (() => {
-        const DPR = Math.min(window.devicePixelRatio || 1, 2);
-        const MIN_SCALE = 0.2;
-        const MAX_SCALE = 8;
-        const TOUCH_START_THRESHOLD = 8;
+    // ============================================
+    // 常量定义
+    // ============================================
+    const CONFIG = {
+        DPR: Math.min(window.devicePixelRatio || 1, 2),
+        SIZE_STEPS: [2, 4, 8, 16],
+        ZONE_IDS: ['a', 'b'],
+    };
 
-        const penBtn = document.getElementById("penBtn");
-        const eraserBtn = document.getElementById("eraserBtn");
-        const undoBtn = document.getElementById("undoBtn");
-        const redoBtn = document.getElementById("redoBtn");
-        const centerBtn = document.getElementById("centerBtn");
-        const clearBtn = document.getElementById("clearBtn");
-        const mainToolbar = document.getElementById("mainToolbar");
-        const mainContainer = document.getElementById("mainContainer");
-        const resizerBar = document.getElementById("resizerBar");
-        const zoneA = document.getElementById("zone-a");
-        const zoneB = document.getElementById("zone-b");
-        const sizePopup = document.getElementById("sizePopup");
-        const popupSizeSlider = document.getElementById("popupSizeSlider");
-        const popupSizeNum = document.getElementById("popupSizeNum");
-        const sizePresetsContainer = document.getElementById("sizePresets");
-        const groupColors = document.getElementById("group-colors");
+    // ============================================
+    // 页面元素缓存
+    // ============================================
+    const DOM = {
+        penBtn: document.getElementById('penBtn'),
+        eraserBtn: document.getElementById('eraserBtn'),
+        undoBtn: document.getElementById('undoBtn'),
+        redoBtn: document.getElementById('redoBtn'),
+        centerBtn: document.getElementById('centerBtn'),
+        clearBtn: document.getElementById('clearBtn'),
+        sizeBtn: document.getElementById('sizeBtn'),
+        minimizeBtn: document.getElementById('minimizeBtn'),
+        closeBtn: document.getElementById('closeBtn'),
+        mainToolbar: document.getElementById('mainToolbar'),
+        resizerBar: document.getElementById('resizerBar'),
+        sizePopup: document.getElementById('sizePopup'),
+        sizeSlider: document.getElementById('sizeSlider'),
+        sizeNum: document.getElementById('sizeNum'),
+        sizePreview: document.getElementById('sizePreview'),
+        colorGroup: document.getElementById('group-colors'),
+    };
 
-        let draggingGroup = null;
-        let splitRatio = 0.618; // 初始分屏比例为黄金分割
-        const SIZE_STEPS = [2, 4, 8, 16];
-        let toolbarState = {
-            mode: "pen",
-            color: "#000000",
-            size: SIZE_STEPS[0]
+    // ============================================
+    // 全局状态
+    // ============================================
+    const STATE = {
+        mode: 'pen',
+        color: '#000000',
+        size: 2,
+        ratio: 0.618,
+        activeZone: 'a',
+        popupVisible: false,
+    };
+
+    const DRAG = {
+        isDragging: false,
+        group: null,
+        startX: 0,
+        pointerId: null,
+        moved: false,
+    };
+
+    // ============================================
+    // 区域数据结构
+    // ============================================
+    function createZone(id) {
+        return {
+            id,
+            canvas: document.getElementById(`canvas-${id}`),
+            ctx: document.getElementById(`canvas-${id}`).getContext('2d'),
+            strokes: [],
+            undoStack: [],
+            redoStack: [],
+            current: null,
+            scale: 1,
+            offsetX: 0,
+            offsetY: 0,
+            pointers: new Map(),
+            isDrawing: false,
+            drawingId: null,
+            touchStart: null,
+            pinchDist: 0,
+            pinchScale: 1,
+            pinchCenter: {},
+            pinchOffset: {},
+            eraserCursor: null,
         };
-        let isPopupVisible = false;
+    }
 
-        const zones = {
-            a: {
-                id: 'a',
-                dom: zoneA,
-                canvas: document.getElementById("canvas-a"),
-                ctx: document.getElementById("canvas-a").getContext("2d", { alpha: true }),
-                strokes: [],
-                undoStack: [],
-                redoStack: [],
-                currentStroke: null,
-                scale: 1,
-                offsetX: 0,
-                offsetY: 0,
-                pointers: new Map(),
-                isDrawing: false,
-                touchStartPoint: null,
-                pinchStartDist: 0,
-                pinchStartScale: 1,
-                pinchStartCenter: { x: 0, y: 0 },
-                pinchStartOffset: { x: 0, y: 0 },
-                eraserCursor: null
-            },
-            b: {
-                id: 'b',
-                dom: zoneB,
-                canvas: document.getElementById("canvas-b"),
-                ctx: document.getElementById("canvas-b").getContext("2d", { alpha: true }),
-                strokes: [],
-                undoStack: [],
-                redoStack: [],
-                currentStroke: null,
-                scale: 1,
-                offsetX: 0,
-                offsetY: 0,
-                pointers: new Map(),
-                isDrawing: false,
-                touchStartPoint: null,
-                pinchStartDist: 0,
-                pinchStartScale: 1,
-                pinchStartCenter: { x: 0, y: 0 },
-                pinchStartOffset: { x: 0, y: 0 },
-                eraserCursor: null
-            }
-        };
-        let activeZoneId = 'a';
+    const ZONES = Object.fromEntries(CONFIG.ZONE_IDS.map(id => [id, createZone(id)]));
 
-        function switchActiveZone(zoneId) {
-            if (activeZoneId === zoneId) return;
-            activeZoneId = zoneId;
-            document.querySelectorAll('.zone-viewport').forEach(el => el.classList.remove('active'));
-            zones[zoneId].dom.classList.add('active');
-        }
-        window.switchActiveZone = switchActiveZone;
+    // ============================================
+    // 工具函数
+    // ============================================
+    const Utils = {
+        dist: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1),
 
-        // ========== 弹出面板逻辑 ==========
-        function getSizeStepIndex(sizeValue) {
-            const idx = SIZE_STEPS.indexOf(sizeValue);
-            return idx >= 0 ? idx : 0;
-        }
+        pointToLine: (px, py, x1, y1, x2, y2) => {
+            const t = Math.max(0, Math.min(1, ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / ((x2 - x1) ** 2 + (y2 - y1) ** 2)));
+            return Utils.dist(px, py, x1 + t * (x2 - x1), y1 + t * (y2 - y1));
+        },
 
-        function syncPopupToState() {
-            const stepIndex = getSizeStepIndex(toolbarState.size);
-            popupSizeSlider.value = stepIndex;
-            popupSizeNum.textContent = toolbarState.size;
-            document.querySelectorAll('.size-preset-dot').forEach(dot => {
-                const dotIndex = parseInt(dot.getAttribute('data-size-index'), 10);
-                dot.classList.toggle('active-preset', dotIndex === stepIndex);
-            });
-        }
-
-        function showSizePopup() {
-            syncPopupToState();
-            positionPopup();
-            sizePopup.classList.add('visible');
-            isPopupVisible = true;
-        }
-
-        function hideSizePopup() {
-            sizePopup.classList.remove('visible');
-            isPopupVisible = false;
-        }
-
-        function toggleSizePopup() {
-            if (isPopupVisible) {
-                hideSizePopup();
-            } else {
-                showSizePopup();
-            }
-        }
-
-        function positionPopup() {
-            const colorGroupRect = groupColors.getBoundingClientRect();
-            const popupWidth = sizePopup.offsetWidth || 200;
-            const popupHeight = sizePopup.offsetHeight || 130;
-            let top = colorGroupRect.bottom + 10;
-            let left = colorGroupRect.left;
-
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-            if (left + popupWidth > viewportWidth - 12) {
-                left = viewportWidth - popupWidth - 12;
-            }
-            if (left < 12) {
-                left = 12;
-            }
-
-            if (top + popupHeight > viewportHeight - 20) {
-                top = colorGroupRect.top - popupHeight - 10;
-                if (top < 8) {
-                    top = 8;
-                }
-            }
-
-            sizePopup.style.top = top + 'px';
-            sizePopup.style.left = left + 'px';
-
-            const arrowLeft = Math.max(16, Math.min(colorGroupRect.left + colorGroupRect.width / 2 - left - 7, popupWidth - 30));
-            sizePopup.style.setProperty('--arrow-left', arrowLeft + 'px');
-
-            const styleId = 'popup-arrow-style';
-            let styleEl = document.getElementById(styleId);
-            if (!styleEl) {
-                styleEl = document.createElement('style');
-                styleEl.id = styleId;
-                document.head.appendChild(styleEl);
-            }
-            styleEl.textContent = `.size-popup::before { left: ${arrowLeft}px !important; }`;
-        }
-
-        popupSizeSlider.addEventListener('input', (e) => {
-            const stepIndex = parseInt(e.target.value, 10);
-            toolbarState.size = SIZE_STEPS[stepIndex];
-            popupSizeNum.textContent = toolbarState.size;
-            document.querySelectorAll('.size-preset-dot').forEach(dot => {
-                const dotIndex = parseInt(dot.getAttribute('data-size-index'), 10);
-                dot.classList.toggle('active-preset', dotIndex === stepIndex);
-            });
-        });
-
-        sizePresetsContainer.addEventListener('click', (e) => {
-            const dot = e.target.closest('.size-preset-dot');
-            if (!dot) return;
-            const stepIndex = parseInt(dot.getAttribute('data-size-index'), 10);
-            toolbarState.size = SIZE_STEPS[stepIndex];
-            popupSizeSlider.value = stepIndex;
-            popupSizeNum.textContent = toolbarState.size;
-            document.querySelectorAll('.size-preset-dot').forEach(d => {
-                const di = parseInt(d.getAttribute('data-size-index'), 10);
-                d.classList.toggle('active-preset', di === stepIndex);
-            });
-        });
-
-        sizePopup.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
-        });
-        sizePopup.addEventListener('click', (e) => {
-            e.stopPropagation();
-        });
-
-        mainToolbar.addEventListener('scroll', () => {
-            if (isPopupVisible) {
-                hideSizePopup();
-            }
-        }, { passive: true });
-
-        window.addEventListener('resize', () => {
-            if (isPopupVisible) {
-                hideSizePopup();
-            }
-        });
-
-        window.addEventListener('orientationchange', () => {
-            if (isPopupVisible) {
-                hideSizePopup();
-            }
-            setTimeout(resizeCanvas, 200);
-        });
-
-        document.addEventListener('click', (e) => {
-            if (!isPopupVisible) return;
-            if (sizePopup.contains(e.target)) return;
-            if (e.target.closest('.color') && e.target.closest('#group-colors')) return;
-            if (e.target.closest('#group-colors .drag-handle')) return;
-            hideSizePopup();
-        });
-
-        document.querySelectorAll("#group-colors .color").forEach((el) => {
-            el.addEventListener('click', (e) => {
-                document.querySelectorAll("#group-colors .color").forEach((c) => c.classList.remove("active"));
-                el.classList.add("active");
-                toolbarState.color = el.getAttribute("data-color");
-
-                if (!isPopupVisible) {
-                    showSizePopup();
-                } else {
-                    positionPopup();
-                }
-            });
-        });
-
-        // 💡 核心重构：将原本计算横向宽度的逻辑修改为适配上下分屏计算高度
-        function resizeCanvas() {
-            const width = window.innerWidth;
-            const totalHeight = window.innerHeight; // 抓取全局视口高度
-            if (width <= 0 || totalHeight <= 0) return;
-
-            // 根据上下比例重新划分两区的高度
-            const heightA = totalHeight * splitRatio;
-            const heightB = totalHeight * (1 - splitRatio);
-
-            zoneA.style.flex = `0 0 ${heightA}px`;
-            zoneB.style.flex = `0 0 ${heightB}px`;
-
-            Object.values(zones).forEach(z => {
-                const currentHeight = z.id === 'a' ? heightA : heightB;
-
-                z.canvas.width = width * DPR;
-                z.canvas.height = currentHeight * DPR;
-                z.canvas.style.width = width + "px";
-                z.canvas.style.height = currentHeight + "px";
-
-                requestRender(z);
-            });
-
-            if (isPopupVisible) {
-                requestAnimationFrame(() => positionPopup());
-            }
-        }
-        window.resizeCanvas = resizeCanvas;
-
-        // 💡 核心重构：上下拖拉分配条，捕捉 Y 轴移动距离
-        resizerBar.addEventListener('pointerdown', (e) => {
-            if (!e.isPrimary) return;
-            forceResetAllStates();
-            resizerBar.classList.add('active-drag');
-            try {
-                resizerBar.setPointerCapture(e.pointerId);
-            } catch (_) {}
-        });
-
-        resizerBar.addEventListener('pointermove', (e) => {
-            if (!resizerBar.classList.contains('active-drag')) return;
-
-            const touchY = e.clientY; // 捕获触控点的高度位置
-            const totalHeight = window.innerHeight;
-
-            let newRatio = touchY / totalHeight;
-            if (newRatio < 0.2) newRatio = 0.2;
-            if (newRatio > 0.8) newRatio = 0.8;
-
-            splitRatio = newRatio;
-            resizeCanvas();
-        });
-
-        const endResizeDrag = (e) => {
-            if (resizerBar.classList.contains('active-drag')) {
-                resizerBar.classList.remove('active-drag');
-                try {
-                    resizerBar.releasePointerCapture(e.pointerId);
-                } catch (_) {}
-            }
-        };
-        resizerBar.addEventListener('pointerup', endResizeDrag);
-        resizerBar.addEventListener('pointercancel', endResizeDrag);
-
-        resizerBar.addEventListener('dblclick', () => {
-            splitRatio = 0.618;
-            resizeCanvas();
-        });
-
-        function forceResetAllStates() {
-            Object.values(zones).forEach(z => {
-                z.isDrawing = false;
-                z.touchStartPoint = null;
-                z.eraserCursor = null;
-                z.currentStroke = null;
-                z.pointers.clear();
-                requestRender(z);
-            });
-            if (draggingGroup) {
-                draggingGroup.classList.remove('dragging');
-                draggingGroup = null;
-            }
-        }
-
-        window.onAppMaximized = () => {
-            forceResetAllStates();
-            setTimeout(resizeCanvas, 60);
-        };
-
-        function screenToWorld(clientX, clientY, zone) {
+        screenToWorld: (x, y, zone) => {
             const rect = zone.canvas.getBoundingClientRect();
             return {
-                x: (clientX - rect.left - zone.offsetX) / zone.scale,
-                y: (clientY - rect.top - zone.offsetY) / zone.scale,
+                x: (x - rect.left - zone.offsetX) / zone.scale,
+                y: (y - rect.top - zone.offsetY) / zone.scale,
             };
-        }
+        },
 
-        function drawStroke(ctx, stroke, zone) {
-            if (!stroke || !stroke.points || stroke.points.length === 0) return;
+        resetAllStates: () => {
+            CONFIG.ZONE_IDS.forEach(id => {
+                const z = ZONES[id];
+                z.isDrawing = z.drawingId = z.touchStart = z.eraserCursor = z.current = null;
+                z.pointers.clear();
+                Render.request(z);
+            });
+            document.querySelectorAll('.toolbar .group.dragging').forEach(el => el.classList.remove('dragging'));
+        },
+    };
+
+    // ============================================
+    // 绘制系统
+    // ============================================
+    const Render = {
+        flags: {},
+
+        stroke: (ctx, stroke, zone) => {
+            if (!stroke?.points?.length) return;
             ctx.save();
-            ctx.lineCap = "round";
-            ctx.lineJoin = "round";
+            ctx.lineCap = ctx.lineJoin = 'round';
             ctx.strokeStyle = stroke.color;
             ctx.lineWidth = stroke.size;
-            ctx.shadowBlur = 0;
-
             ctx.beginPath();
+
             if (stroke.points.length === 1) {
                 const p = stroke.points[0];
                 ctx.arc(p.x, p.y, stroke.size / 2, 0, Math.PI * 2);
                 ctx.fillStyle = stroke.color;
                 ctx.fill();
-                ctx.restore();
-                return;
-            }
-
-            ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-            let i;
-            for (i = 1; i < stroke.points.length - 1; i++) {
-                const xc = (stroke.points[i].x + stroke.points[i + 1].x) / 2;
-                const yc = (stroke.points[i].y + stroke.points[i + 1].y) / 2;
-                ctx.quadraticCurveTo(stroke.points[i].x, stroke.points[i].y, xc, yc);
-            }
-            ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        function pointToLineDistance(px, py, x1, y1, x2, y2) {
-            const A = px - x1, B = py - y1, C = x2 - x1, D = y2 - y1;
-            const dot = A * C + B * D;
-            const lenSq = C * C + D * D;
-            let param = -1;
-            if (lenSq !== 0) param = dot / lenSq;
-            let xx, yy;
-            if (param < 0) {
-                xx = x1; yy = y1;
-            } else if (param > 1) {
-                xx = x2; yy = y2;
             } else {
-                xx = x1 + param * C;
-                yy = y1 + param * D;
+                ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+                for (let i = 1; i < stroke.points.length - 1; i++) {
+                    const xc = (stroke.points[i].x + stroke.points[i + 1].x) / 2;
+                    const yc = (stroke.points[i].y + stroke.points[i + 1].y) / 2;
+                    ctx.quadraticCurveTo(stroke.points[i].x, stroke.points[i].y, xc, yc);
+                }
+                ctx.lineTo(stroke.points[stroke.points.length - 1].x, stroke.points[stroke.points.length - 1].y);
+                ctx.stroke();
             }
-            return Math.hypot(px - xx, py - yy);
-        }
+            ctx.restore();
+        },
 
-        function eraseStrokesAt(worldPoint, zone) {
-            const eraserRadius = (toolbarState.size * 2.5) / zone.scale;
-            let changed = false;
+        eraserCursor: (ctx, zone) => {
+            if (STATE.mode !== 'eraser' || !zone.eraserCursor) return;
+            const radius = (STATE.size * 2.5) / zone.scale;
+            ctx.strokeStyle = 'rgba(37,99,235,0.75)';
+            ctx.lineWidth = 1.5 / zone.scale;
+            ctx.setLineDash([4 / zone.scale, 3 / zone.scale]);
+            ctx.beginPath();
+            ctx.arc(zone.eraserCursor.x, zone.eraserCursor.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(37,99,235,0.08)';
+            ctx.fill();
+        },
 
+        request: (zone) => {
+            if (Render.flags[zone.id]) return;
+            Render.flags[zone.id] = true;
+            requestAnimationFrame(() => {
+                Render.flags[zone.id] = false;
+                const ctx = zone.ctx;
+                ctx.clearRect(0, 0, zone.canvas.width, zone.canvas.height);
+                ctx.save();
+                ctx.scale(CONFIG.DPR, CONFIG.DPR);
+                ctx.translate(zone.offsetX, zone.offsetY);
+                ctx.scale(zone.scale, zone.scale);
+                zone.strokes.forEach(s => Render.stroke(ctx, s, zone));
+                if (zone.current) Render.stroke(ctx, zone.current, zone);
+                Render.eraserCursor(ctx, zone);
+                ctx.restore();
+            });
+        },
+    };
+
+    // ============================================
+    // 编辑操作
+    // ============================================
+    const Edit = {
+        finish: (zone) => {
+            if (!zone.current) return;
+            zone.strokes.push(zone.current);
+            zone.undoStack.push({ type: 'add', stroke: zone.current });
+            zone.redoStack = [];
+            zone.current = null;
+            Render.request(zone);
+        },
+
+        erase: (point, zone) => {
+            const radius = (STATE.size * 2.5) / zone.scale;
             for (let i = zone.strokes.length - 1; i >= 0; i--) {
                 const stroke = zone.strokes[i];
-                if (stroke.points.length === 0) continue;
+                if (!stroke.points.length) continue;
 
                 const xs = stroke.points.map(p => p.x);
                 const ys = stroke.points.map(p => p.y);
-                if (worldPoint.x < Math.min(...xs) - eraserRadius || worldPoint.x > Math.max(...xs) + eraserRadius ||
-                    worldPoint.y < Math.min(...ys) - eraserRadius || worldPoint.y > Math.max(...ys) + eraserRadius) {
-                    continue;
-                }
+                const minX = Math.min(...xs);
+                const maxX = Math.max(...xs);
+                const minY = Math.min(...ys);
+                const maxY = Math.max(...ys);
 
-                if (stroke.points.length === 1) {
-                    if (Math.hypot(worldPoint.x - stroke.points[0].x, worldPoint.y - stroke.points[0].y) <= eraserRadius) {
-                        const removed = zone.strokes.splice(i, 1)[0];
-                        zone.undoStack.push({ type: "erase", stroke: removed, index: i });
-                        zone.redoStack = [];
-                        changed = true;
-                    }
-                    continue;
-                }
+                if (point.x < minX - radius || point.x > maxX + radius || point.y < minY - radius || point.y > maxY + radius) continue;
 
-                for (let j = 0; j < stroke.points.length - 1; j++) {
-                    if (pointToLineDistance(worldPoint.x, worldPoint.y, stroke.points[j].x, stroke.points[j].y, stroke.points[j + 1].x, stroke.points[j + 1].y) <= eraserRadius) {
-                        const removed = zone.strokes.splice(i, 1)[0];
-                        zone.undoStack.push({ type: "erase", stroke: removed, index: i });
-                        zone.redoStack = [];
-                        changed = true;
-                        break;
-                    }
-                }
-            }
-            if (changed) requestRender(zone);
-        }
-
-        const renderFlags = { a: false, b: false };
-        function requestRender(zone) {
-            if (renderFlags[zone.id]) return;
-            renderFlags[zone.id] = true;
-            requestAnimationFrame(() => {
-                renderFlags[zone.id] = false;
-                render(zone);
-            });
-        }
-
-        function render(zone) {
-            const ctx = zone.ctx;
-            ctx.clearRect(0, 0, zone.canvas.width, zone.canvas.height);
-            ctx.save();
-            ctx.scale(DPR, DPR);
-
-            ctx.translate(zone.offsetX, zone.offsetY);
-            ctx.scale(zone.scale, zone.scale);
-
-            for (const s of zone.strokes) drawStroke(ctx, s, zone);
-            if (zone.currentStroke) drawStroke(ctx, zone.currentStroke, zone);
-
-            if (toolbarState.mode === "eraser" && zone.eraserCursor) {
-                ctx.save();
-                const eraserRadius = (toolbarState.size * 2.5) / zone.scale;
-
-                ctx.beginPath();
-                ctx.arc(zone.eraserCursor.x, zone.eraserCursor.y, eraserRadius, 0, Math.PI * 2);
-                ctx.strokeStyle = "rgba(37, 99, 235, 0.75)";
-                ctx.lineWidth = 1.5 / zone.scale;
-                ctx.setLineDash([4 / zone.scale, 3 / zone.scale]);
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.arc(zone.eraserCursor.x, zone.eraserCursor.y, eraserRadius, 0, Math.PI * 2);
-                ctx.fillStyle = "rgba(37, 99, 235, 0.08)";
-                ctx.fill();
-
-                ctx.restore();
-            }
-            ctx.restore();
-        }
-
-        function finishStroke(zone) {
-            if (!zone.currentStroke) return;
-            zone.strokes.push(zone.currentStroke);
-            zone.undoStack.push({ type: "add", stroke: zone.currentStroke });
-            zone.redoStack = [];
-            zone.currentStroke = null;
-            requestRender(zone);
-        }
-
-        function setupSandboxEvents(zone) {
-            const el = zone.canvas;
-            el.addEventListener("pointerdown", (e) => {
-                switchActiveZone(zone.id);
-                zone.pointers.set(e.pointerId, e);
-
-                if (e.pointerType === "pen") {
-                    try { el.setPointerCapture(e.pointerId); } catch (_) {}
-                    const world = screenToWorld(e.clientX, e.clientY, zone);
-                    zone.isDrawing = true;
-                    zone.touchStartPoint = null;
-
-                    if (toolbarState.mode === "eraser") {
-                        zone.eraserCursor = world;
-                        eraseStrokesAt(world, zone);
-                    } else {
-                        zone.currentStroke = { type: "pen", color: toolbarState.color, size: toolbarState.size, points: [world] };
-                        requestRender(zone);
-                    }
-                    return;
-                }
-
-                if (e.pointerType === "touch") {
-                    const touchPointers = [...zone.pointers.values()].filter(p => p.pointerType === "touch");
-                    if (touchPointers.length >= 2) {
-                        if (zone.isDrawing && zone.currentStroke) { finishStroke(zone); }
-                        zone.isDrawing = false;
-                        zone.touchStartPoint = null;
-                        zone.eraserCursor = null;
-
-                        const pts = touchPointers;
-                        zone.pinchStartDist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
-                        zone.pinchStartScale = zone.scale;
-                        zone.pinchStartCenter = { x: (pts[0].clientX + pts[1].clientX) / 2, y: (pts[0].clientY + pts[1].clientY) / 2 };
-                        zone.pinchStartOffset = { x: zone.offsetX, y: zone.offsetY };
-                    } else {
-                        zone.isDrawing = false;
-                        zone.touchStartPoint = { clientX: e.clientX, clientY: e.clientY };
-                    }
-                }
-            });
-
-            el.addEventListener("pointermove", (e) => {
-                if (!zone.pointers.has(e.pointerId)) return;
-                zone.pointers.set(e.pointerId, e);
-
-                if (e.pointerType === "pen" && zone.isDrawing) {
-                    const world = screenToWorld(e.clientX, e.clientY, zone);
-                    if (toolbarState.mode === "eraser") {
-                        zone.eraserCursor = world;
-                        eraseStrokesAt(world, zone);
-                        requestRender(zone);
-                    } else if (zone.currentStroke) {
-                        const last = zone.currentStroke.points[zone.currentStroke.points.length - 1];
-                        if (Math.hypot(world.x - last.x, world.y - last.y) < 1.2) return;
-                        zone.currentStroke.points.push(world);
-                        requestRender(zone);
-                    }
-                    return;
-                }
-
-                const touchPointers = [...zone.pointers.values()].filter(p => p.pointerType === "touch");
-                if (touchPointers.length >= 2) {
-                    const pts = touchPointers;
-                    const dist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
-                    let newScale = zone.pinchStartScale * (dist / (zone.pinchStartDist || 1));
-                    newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
-
-                    const currentCenter = { x: (pts[0].clientX + pts[1].clientX) / 2, y: (pts[0].clientY + pts[1].clientY) / 2 };
-                    const rect = zone.canvas.getBoundingClientRect();
-                    const originTransformX = (zone.pinchStartCenter.x - rect.left - zone.pinchStartOffset.x) / zone.pinchStartScale;
-                    const originTransformY = (zone.pinchStartCenter.y - rect.top - zone.pinchStartOffset.y) / zone.pinchStartScale;
-                    zone.scale = newScale;
-                    zone.offsetX = (currentCenter.x - rect.left) - originTransformX * zone.scale;
-                    zone.offsetY = (currentCenter.y - rect.top) - originTransformY * zone.scale;
-
-                    requestRender(zone);
-                    return;
-                }
-
-                if (e.pointerType === "touch" && touchPointers.length === 1) {
-                    if (zone.isDrawing) {
-                        const world = screenToWorld(e.clientX, e.clientY, zone);
-                        if (toolbarState.mode === "eraser") {
-                            zone.eraserCursor = world;
-                            eraseStrokesAt(world, zone);
-                            requestRender(zone);
-                        } else if (zone.currentStroke) {
-                            const last = zone.currentStroke.points[zone.currentStroke.points.length - 1];
-                            if (Math.hypot(world.x - last.x, world.y - last.y) < 1.2) return;
-                            zone.currentStroke.points.push(world);
-                            requestRender(zone);
-                        }
-                    } else if (zone.touchStartPoint) {
-                        const moveDist = Math.hypot(e.clientX - zone.touchStartPoint.clientX, e.clientY - zone.touchStartPoint.clientY);
-                        if (moveDist >= TOUCH_START_THRESHOLD) {
-                            try { el.setPointerCapture(e.pointerId); } catch (_) {}
-                            zone.isDrawing = true;
-                            const startWorld = screenToWorld(zone.touchStartPoint.clientX, zone.touchStartPoint.clientY, zone);
-                            const currentWorld = screenToWorld(e.clientX, e.clientY, zone);
-
-                            if (toolbarState.mode === "eraser") {
-                                zone.eraserCursor = currentWorld;
-                                eraseStrokesAt(currentWorld, zone);
-                            } else {
-                                zone.currentStroke = {
-                                    type: "pen",
-                                    color: toolbarState.color,
-                                    size: toolbarState.size,
-                                    points: [startWorld, currentWorld]
-                                };
-                            }
-                            zone.touchStartPoint = null;
-                            requestRender(zone);
+                let shouldRemove = stroke.points.length === 1 && Utils.dist(point.x, point.y, stroke.points[0].x, stroke.points[0].y) <= radius;
+                if (!shouldRemove) {
+                    for (let j = 0; j < stroke.points.length - 1; j++) {
+                        if (Utils.pointToLine(point.x, point.y, stroke.points[j].x, stroke.points[j].y, stroke.points[j + 1].x, stroke.points[j + 1].y) <= radius) {
+                            shouldRemove = true;
+                            break;
                         }
                     }
                 }
-            });
 
-            const onUp = (e) => {
-                if (zone.pointers.has(e.pointerId)) {
-                    try { el.releasePointerCapture(e.pointerId); } catch (_) {}
-                    zone.pointers.delete(e.pointerId);
+                if (shouldRemove) {
+                    const removed = zone.strokes.splice(i, 1)[0];
+                    zone.undoStack.push({ type: 'erase', stroke: removed, index: i });
+                    zone.redoStack = [];
                 }
-                if (zone.isDrawing) {
-                    finishStroke(zone);
-                }
-                if (zone.touchStartPoint && toolbarState.mode === "eraser") {
-                    const world = screenToWorld(zone.touchStartPoint.clientX, zone.touchStartPoint.clientY, zone);
-                    eraseStrokesAt(world, zone);
-                }
-                zone.isDrawing = false;
-                zone.touchStartPoint = null;
-                zone.eraserCursor = null;
-                requestRender(zone);
-            };
+            }
+            Render.request(zone);
+        },
 
-            el.addEventListener("pointerup", onUp);
-            el.addEventListener("pointercancel", onUp);
-        }
-
-        function undo() {
-            const z = zones[activeZoneId];
-            if (z.undoStack.length === 0) return;
+        undo: () => {
+            const z = ZONES[STATE.activeZone];
+            if (!z.undoStack.length) return;
             const action = z.undoStack.pop();
             z.redoStack.push(action);
+            if (action.type === 'add') z.strokes.pop();
+            else if (action.type === 'erase') z.strokes.splice(action.index, 0, action.stroke);
+            else z.strokes = [...action.oldStrokes];
+            Render.request(z);
+        },
 
-            if (action.type === "add") { z.strokes.pop(); }
-            else if (action.type === "erase") { z.strokes.splice(action.index, 0, action.stroke); }
-            else if (action.type === "clear") { z.strokes = [...action.oldStrokes]; }
-            requestRender(z);
-        }
-
-        function redo() {
-            const z = zones[activeZoneId];
-            if (z.redoStack.length === 0) return;
+        redo: () => {
+            const z = ZONES[STATE.activeZone];
+            if (!z.redoStack.length) return;
             const action = z.redoStack.pop();
             z.undoStack.push(action);
+            if (action.type === 'add') z.strokes.push(action.stroke);
+            else if (action.type === 'erase') z.strokes.splice(action.index, 1);
+            else z.strokes = [];
+            Render.request(z);
+        },
 
-            if (action.type === "add") { z.strokes.push(action.stroke); }
-            else if (action.type === "erase") { z.strokes.splice(action.index, 1); }
-            else if (action.type === "clear") { z.strokes = []; }
-            requestRender(z);
-        }
-
-        function centerView() {
-            const z = zones[activeZoneId];
+        center: () => {
+            const z = ZONES[STATE.activeZone];
             z.scale = 1;
-            z.offsetX = 0;
-            z.offsetY = 0;
-            requestRender(z);
-        }
+            z.offsetX = z.offsetY = 0;
+            Render.request(z);
+        },
 
-        function clearAll() {
-            const z = zones[activeZoneId];
-            if (z.strokes.length === 0) return;
-            z.undoStack.push({ type: "clear", oldStrokes: [...z.strokes] });
+        clear: () => {
+            const z = ZONES[STATE.activeZone];
+            if (!z.strokes.length) return;
+            z.undoStack.push({ type: 'clear', oldStrokes: [...z.strokes] });
             z.redoStack = [];
             z.strokes = [];
-            requestRender(z);
-        }
+            Render.request(z);
+        },
+    };
 
-        penBtn.onclick = () => {
-            toolbarState.mode = "pen";
-            penBtn.classList.add("active");
-            eraserBtn.classList.remove("active");
-        };
-        eraserBtn.onclick = () => {
-            toolbarState.mode = "eraser";
-            eraserBtn.classList.add("active");
-            penBtn.classList.remove("active");
-        };
+    // ============================================
+    // UI 操作
+    // ============================================
+    const UI = {
+        updateSize: (idx) => {
+            STATE.size = CONFIG.SIZE_STEPS[idx];
+            DOM.sizeNum.textContent = STATE.size;
+            DOM.sizeSlider.value = idx;
+            DOM.sizePreview.style.width = DOM.sizePreview.style.height = `${20 + STATE.size * 2}px`;
+        },
 
-        undoBtn.onclick = undo;
-        redoBtn.onclick = redo;
-        centerBtn.onclick = centerView;
-        clearBtn.onclick = clearAll;
+        showSizePopup: () => {
+            const rect = DOM.colorGroup.getBoundingClientRect();
+            DOM.sizePopup.style.top = `${rect.bottom + 12}px`;
+            DOM.sizePopup.style.left = `${Math.max(16, Math.min(rect.left, window.innerWidth - 240))}px`;
+            DOM.sizePopup.classList.add('visible');
+            STATE.popupVisible = true;
+        },
 
-        document.getElementById("minimizeBtn").onclick = () => {
-            if (window.AndroidBridge && window.AndroidBridge.minimizeApp) {
-                window.AndroidBridge.minimizeApp(true);
+        hideSizePopup: () => {
+            DOM.sizePopup.classList.remove('visible');
+            STATE.popupVisible = false;
+        },
+
+        resizeCanvas: () => {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            const ha = h * STATE.ratio;
+            const hb = h * (1 - STATE.ratio);
+
+            document.getElementById('zone-a').style.flex = `0 0 ${ha}px`;
+            document.getElementById('zone-b').style.flex = `0 0 ${hb}px`;
+
+            CONFIG.ZONE_IDS.forEach(id => {
+                const z = ZONES[id];
+                const tz = id === 'a' ? ha : hb;
+                z.canvas.width = w * CONFIG.DPR;
+                z.canvas.height = tz * CONFIG.DPR;
+                z.canvas.style.width = `${w}px`;
+                z.canvas.style.height = `${tz}px`;
+                Render.request(z);
+            });
+        },
+    };
+
+    // ============================================
+    // 绘画输入处理
+    // ============================================
+    function setupCanvasEvents(zone) {
+        const el = zone.canvas;
+        el.addEventListener('pointerdown', (e) => {
+            window.switchActiveZone(zone.id);
+            zone.pointers.set(e.pointerId, e);
+
+            if (e.pointerType === 'pen') {
+                el.setPointerCapture(e.pointerId);
+                const world = Utils.screenToWorld(e.clientX, e.clientY, zone);
+                zone.isDrawing = true;
+                zone.drawingId = e.pointerId;
+
+                if (STATE.mode === 'eraser') {
+                    zone.eraserCursor = world;
+                    Edit.erase(world, zone);
+                } else {
+                    zone.current = { color: STATE.color, size: STATE.size, points: [world] };
+                    Render.request(zone);
+                }
+            } else if (e.pointerType === 'touch') {
+                const touches = [...zone.pointers.values()].filter(p => p.pointerType === 'touch');
+                if (touches.length >= 2) {
+                    zone.isDrawing = false;
+                    zone.touchStart = zone.eraserCursor = null;
+                    zone.pinchDist = Utils.dist(touches[0].clientX, touches[0].clientY, touches[1].clientX, touches[1].clientY);
+                    zone.pinchScale = zone.scale;
+                    zone.pinchCenter = { x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 };
+                    zone.pinchOffset = { x: zone.offsetX, y: zone.offsetY };
+                } else if (!zone.isDrawing) {
+                    zone.touchStart = { x: e.clientX, y: e.clientY, id: e.pointerId };
+                }
             }
-        };
+        });
 
-        document.getElementById("closeBtn").onclick = () => {
-            if (window.AndroidBridge && window.AndroidBridge.closeApp) {
-                window.AndroidBridge.closeApp();
+        el.addEventListener('pointermove', (e) => {
+            if (!zone.pointers.has(e.pointerId)) return;
+            zone.pointers.set(e.pointerId, e);
+
+            if (zone.isDrawing && (e.pointerId === zone.drawingId || e.pointerType === 'pen')) {
+                const world = Utils.screenToWorld(e.clientX, e.clientY, zone);
+                if (STATE.mode === 'eraser') {
+                    zone.eraserCursor = world;
+                    Edit.erase(world, zone);
+                } else if (zone.current) {
+                    const last = zone.current.points[zone.current.points.length - 1];
+                    if (Utils.dist(world.x, world.y, last.x, last.y) >= 1.2) {
+                        zone.current.points.push(world);
+                        Render.request(zone);
+                    }
+                }
+            } else {
+                const touches = [...zone.pointers.values()].filter(p => p.pointerType === 'touch');
+
+                if (touches.length >= 2 && !zone.isDrawing) {
+                    const dist = Utils.dist(touches[0].clientX, touches[0].clientY, touches[1].clientX, touches[1].clientY);
+                    let newScale = zone.pinchScale * (dist / (zone.pinchDist || 1));
+                    newScale = Math.max(0.2, Math.min(8, newScale));
+                    const center = { x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 };
+                    const rect = zone.canvas.getBoundingClientRect();
+                    const originX = (zone.pinchCenter.x - rect.left - zone.pinchOffset.x) / zone.pinchScale;
+                    const originY = (zone.pinchCenter.y - rect.top - zone.pinchOffset.y) / zone.pinchScale;
+
+                    zone.scale = newScale;
+                    zone.offsetX = center.x - rect.left - originX * zone.scale;
+                    zone.offsetY = center.y - rect.top - originY * zone.scale;
+                    Render.request(zone);
+                } else if (e.pointerType === 'touch' && touches.length === 1 && !zone.isDrawing && zone.touchStart?.id === e.pointerId) {
+                    if (Utils.dist(e.clientX, e.clientY, zone.touchStart.x, zone.touchStart.y) >= 8) {
+                        el.setPointerCapture(e.pointerId);
+                        zone.isDrawing = true;
+                        zone.drawingId = e.pointerId;
+
+                        const start = Utils.screenToWorld(zone.touchStart.x, zone.touchStart.y, zone);
+                        const current = Utils.screenToWorld(e.clientX, e.clientY, zone);
+
+                        if (STATE.mode === 'eraser') {
+                            zone.eraserCursor = current;
+                            Edit.erase(current, zone);
+                        } else {
+                            zone.current = { color: STATE.color, size: STATE.size, points: [start, current] };
+                        }
+                        zone.touchStart = null;
+                        Render.request(zone);
+                    }
+                }
             }
+        });
+
+        const handlePointerUp = (e) => {
+            if (zone.pointers.has(e.pointerId)) {
+                el.releasePointerCapture(e.pointerId);
+                zone.pointers.delete(e.pointerId);
+            }
+            if (zone.isDrawing && e.pointerId === zone.drawingId) {
+                Edit.finish(zone);
+                zone.isDrawing = zone.drawingId = null;
+            }
+            if (zone.touchStart?.id === e.pointerId) {
+                if (STATE.mode === 'eraser') Edit.erase(Utils.screenToWorld(zone.touchStart.x, zone.touchStart.y, zone), zone);
+                zone.touchStart = null;
+            }
+            if (!zone.pointers.size) {
+                zone.isDrawing = zone.drawingId = zone.touchStart = zone.eraserCursor = null;
+            }
+            Render.request(zone);
         };
 
-        Object.values(zones).forEach(z => setupSandboxEvents(z));
+        el.addEventListener('pointerup', handlePointerUp);
+        el.addEventListener('pointercancel', handlePointerUp);
+    }
 
-        window.addEventListener("resize", resizeCanvas);
-        window.addEventListener("orientationchange", () => setTimeout(resizeCanvas, 200));
+    // ============================================
+    // 事件绑定
+    // ============================================
+    function bindEvents() {
+        // 工具按钮
+        DOM.penBtn.onclick = () => {
+            STATE.mode = 'pen';
+            DOM.penBtn.classList.add('active');
+            DOM.eraserBtn.classList.remove('active');
+        };
 
-        syncPopupToState();
-        setTimeout(resizeCanvas, 100);
-    })();
+        DOM.eraserBtn.onclick = () => {
+            STATE.mode = 'eraser';
+            DOM.eraserBtn.classList.add('active');
+            DOM.penBtn.classList.remove('active');
+        };
+
+        DOM.sizeBtn.onclick = () => STATE.popupVisible ? UI.hideSizePopup() : UI.showSizePopup();
+
+        // 编辑按钮
+        DOM.undoBtn.onclick = Edit.undo;
+        DOM.redoBtn.onclick = Edit.redo;
+        DOM.centerBtn.onclick = Edit.center;
+        DOM.clearBtn.onclick = Edit.clear;
+
+        // 系统按钮
+        DOM.minimizeBtn.onclick = () => window.AndroidBridge?.minimizeApp(true);
+        DOM.closeBtn.onclick = () => window.AndroidBridge?.closeApp();
+
+        // 笔刷大小
+        DOM.sizeSlider.addEventListener('input', (e) => UI.updateSize(parseInt(e.target.value)));
+
+        // 颜色选择
+        document.querySelectorAll('#group-colors .color').forEach((el) => {
+            el.addEventListener('click', () => {
+                UI.hideSizePopup();
+                STATE.mode = 'pen';
+                DOM.penBtn.classList.add('active');
+                DOM.eraserBtn.classList.remove('active');
+
+                document.querySelectorAll('#group-colors .color').forEach((c) => c.classList.remove('active'));
+                el.classList.add('active');
+                STATE.color = el.getAttribute('data-color');
+            });
+        });
+
+        // 分屏拖拽
+        DOM.resizerBar.addEventListener('pointerdown', (e) => {
+            if (!e.isPrimary) return;
+            Utils.resetAllStates();
+            DOM.resizerBar.classList.add('active-drag');
+            DOM.resizerBar.setPointerCapture(e.pointerId);
+        });
+
+        DOM.resizerBar.addEventListener('pointermove', (e) => {
+            if (!DOM.resizerBar.classList.contains('active-drag')) return;
+            STATE.ratio = Math.max(0.2, Math.min(0.8, e.clientY / window.innerHeight));
+            UI.resizeCanvas();
+        });
+
+        ['pointerup', 'pointercancel'].forEach((evt) => {
+            DOM.resizerBar.addEventListener(evt, (e) => {
+                DOM.resizerBar.classList.remove('active-drag');
+                DOM.resizerBar.releasePointerCapture(e.pointerId);
+            });
+        });
+
+        DOM.resizerBar.addEventListener('dblclick', () => {
+            STATE.ratio = 0.618;
+            UI.resizeCanvas();
+        });
+
+        // 弹窗关闭
+        document.addEventListener('click', (e) => {
+            if (STATE.popupVisible && !DOM.sizePopup.contains(e.target) && !DOM.sizeBtn.contains(e.target)) {
+                UI.hideSizePopup();
+            }
+        });
+        DOM.sizePopup.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+        // 工具栏拖拽
+        document.addEventListener('pointerdown', (e) => {
+            const handle = e.target.closest('.drag-handle');
+            if (!handle) return;
+            const group = handle.closest('.group');
+            if (!group) return;
+
+            DRAG.isDragging = true;
+            DRAG.group = group;
+            DRAG.startX = e.clientX;
+            DRAG.pointerId = e.pointerId;
+            DRAG.moved = false;
+            group.classList.add('dragging');
+            handle.setPointerCapture(e.pointerId);
+        }, true);
+
+        document.addEventListener('pointermove', (e) => {
+            if (!DRAG.isDragging || !DRAG.group || e.pointerId !== DRAG.pointerId) return;
+            const deltaX = e.clientX - DRAG.startX;
+            if (!DRAG.moved && Math.abs(deltaX) < 5) return;
+            DRAG.moved = true;
+
+            const groups = [...DOM.mainToolbar.querySelectorAll('.group')];
+            for (const g of groups) {
+                if (g === DRAG.group) continue;
+                const rect = g.getBoundingClientRect();
+                if (e.clientX >= rect.left && e.clientX <= rect.right) {
+                    g.parentNode.insertBefore(DRAG.group, e.clientX < rect.left + rect.width / 2 ? g : g.nextSibling);
+                    break;
+                }
+            }
+        }, true);
+
+        document.addEventListener('pointerup', (e) => {
+            if (!DRAG.isDragging || e.pointerId !== DRAG.pointerId) return;
+            if (DRAG.group) DRAG.group.classList.remove('dragging');
+            DRAG.group?.querySelector('.drag-handle')?.releasePointerCapture(e.pointerId);
+            Object.assign(DRAG, { isDragging: false, group: null, moved: false });
+        }, true);
+    }
+
+    // ============================================
+    // 全局接口
+    // ============================================
+    window.switchActiveZone = (zoneId) => {
+        if (STATE.activeZone === zoneId) return;
+        STATE.activeZone = zoneId;
+        document.querySelectorAll('.zone-viewport').forEach((el) => el.classList.remove('active'));
+        document.getElementById(`zone-${zoneId}`).classList.add('active');
+    };
+
+    window.onAppMaximized = () => {
+        Utils.resetAllStates();
+        setTimeout(UI.resizeCanvas, 60);
+    };
+
+    // ============================================
+    // 初始化
+    // ============================================
+    window.addEventListener('resize', UI.resizeCanvas);
+    window.addEventListener('orientationchange', () => setTimeout(UI.resizeCanvas, 200));
+
+    CONFIG.ZONE_IDS.forEach((id) => setupCanvasEvents(ZONES[id]));
+    bindEvents();
+    UI.updateSize(0);
+    UI.resizeCanvas();
 </script>
 </body>
 </html>

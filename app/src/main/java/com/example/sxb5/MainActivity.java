@@ -76,7 +76,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // 1. 生命週期與核心入口
+    // 1. 生命周期与核心入口
     // ==========================================
 
     @Override
@@ -84,7 +84,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         overridePendingTransition(0, 0);
 
-        // 💡 穩固核心：直接綁定完美的 XML CenterCrop 背景，無論何時啟動、何時返回，比例永遠由系統鎖死不變形
+        // 💡 稳固核心：直接绑定完美的 XML CenterCrop 背景，无论何时启动、何时返回，比例永远由系统锁死不变形
         getWindow().setBackgroundDrawableResource(R.drawable.bg_scaled_transition);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
 
@@ -128,7 +128,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // 2. 初始化與配置模組
+    // 2. 初始化与配置模块
     // ==========================================
 
     private void updateScreenSize() {
@@ -190,7 +190,7 @@ public class MainActivity extends AppCompatActivity {
                 isBallAttached = true;
             }
         } catch (Exception e) {
-            Log.e(TAG, "常駐雙視窗初始化掛載失敗", e);
+            Log.e(TAG, "常驻双视窗初始化挂载失败", e);
         }
     }
 
@@ -199,11 +199,19 @@ public class MainActivity extends AppCompatActivity {
         myWebView = new WebView(this);
         myWebView.setBackgroundColor(Color.TRANSPARENT);
 
+        // 🚀 核心优化：开启 WebView 硬件加速层提升 CSS Translate 渲染效能
+        myWebView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
         WebSettings webSettings = myWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
         webSettings.setAllowFileAccess(true);
         webSettings.setDatabaseEnabled(true);
+
+        // 💡 关键重构：全面关闭 WebView 原生手势缩放支持，防止与前端双沙盒双指缩放逻辑打架导致画面严重抖动
+        webSettings.setSupportZoom(false);
+        webSettings.setBuiltInZoomControls(false);
+        webSettings.setDisplayZoomControls(false);
 
         myWebView.addJavascriptInterface(new AndroidBridge(), "AndroidBridge");
         myWebView.setWebViewClient(new WebViewClient() {
@@ -212,7 +220,9 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 isPageLoaded = true;
                 syncTextureToWebView(getSavedBallBase64());
-                executeJavaScript("if(window.resizeCanvas){window.resizeCanvas();}");
+
+                // 延时 60ms 确保视窗完全布局展开后再通知前端测算左右平分宽度，防御 0 宽度破坏布局
+                mainHandler.postDelayed(() -> executeJavaScript("if(window.resizeCanvas){window.resizeCanvas();}"), 60);
             }
         });
 
@@ -226,7 +236,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // 3. 狀態切換模組
+    // 3. 状态切换模块
     // ==========================================
 
     private void maximizeApp() {
@@ -243,6 +253,7 @@ public class MainActivity extends AppCompatActivity {
                 myWebView.setVisibility(View.VISIBLE);
             }
 
+            // 💡 异步通知前端重绘并保证获取当前最新的分屏宽度
             executeJavaScript("if(window.onAppMaximized){window.onAppMaximized();}");
         });
     }
@@ -277,6 +288,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (isWebViewAttached && myWebView != null && webViewLayoutParams.alpha == 1.0f) {
+            // 屏幕旋转后，通知前端重新测算 width/2 重新切割左右两个独立 Canvas 画布
             executeJavaScript("if(window.resizeCanvas){window.resizeCanvas()}");
         }
     }
@@ -286,13 +298,13 @@ public class MainActivity extends AppCompatActivity {
             try {
                 windowManager.updateViewLayout(nativeBall, ballLayoutParams);
             } catch (Exception e) {
-                Log.e(TAG, "更新懸浮球佈局失敗", e);
+                Log.e(TAG, "更新悬浮球布局失败", e);
             }
         }
     }
 
     // ==========================================
-    // 4. 圖片處理與資料持久化模組
+    // 4. 图片处理与数据持久化模块
     // ==========================================
 
     private void initImagePicker() {
@@ -319,7 +331,7 @@ public class MainActivity extends AppCompatActivity {
                 intent.setType("image/*");
                 pickImageLauncher.launch(intent);
             } catch (Exception ex) {
-                Toast.makeText(this, "無法開啟系統相簿", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "无法开启系统相册", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -330,7 +342,7 @@ public class MainActivity extends AppCompatActivity {
         try {
             String mimeType = getContentResolver().getType(uri);
             if (mimeType == null || !mimeType.matches("image/(jpeg|png|jpg)")) {
-                Toast.makeText(this, "格式錯誤！僅限選擇 JPG 或 PNG 圖片", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "格式错误！仅限选择 JPG 或 PNG 图片", Toast.LENGTH_LONG).show();
                 return;
             }
 
@@ -352,12 +364,12 @@ public class MainActivity extends AppCompatActivity {
                     saveBallBase64(base64Data);
                     updateBallTexture(base64Data);
                     syncTextureToWebView(base64Data);
-                    Toast.makeText(this, "更換懸浮球圖案成功！", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "更换悬浮窗图标成功！", Toast.LENGTH_SHORT).show();
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "解析圖片失敗", e);
-            Toast.makeText(this, "圖片讀取失敗", Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "解析图片失败", e);
+            Toast.makeText(this, "图片读取失败", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -415,7 +427,7 @@ public class MainActivity extends AppCompatActivity {
                 }
                 myWebView.evaluateJavascript(pureScript, null);
             } catch (Exception e) {
-                Log.e(TAG, "執行JS失敗", e);
+                Log.e(TAG, "执行JS失败", e);
             }
         });
     }
@@ -435,13 +447,13 @@ public class MainActivity extends AppCompatActivity {
                     myWebView.loadUrl("about:blank");
                     windowManager.removeView(myWebView);
                 }
-            } catch (Exception e) { Log.e(TAG, "銷毀画布異常", e); }
+            } catch (Exception e) { Log.e(TAG, "销毁画布异常", e); }
 
             try {
                 if (isBallAttached && nativeBall != null) {
                     windowManager.removeView(nativeBall);
                 }
-            } catch (Exception e) { Log.e(TAG, "銷毀懸浮球異常", e); }
+            } catch (Exception e) { Log.e(TAG, "销毁悬浮球异常", e); }
 
             isWebViewAttached = false;
             isBallAttached = false;
@@ -449,7 +461,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // 5. 懸浮球手勢監聽器
+    // 5. 悬浮球手势监听器
     // ==========================================
 
     private class FloatingBallTouchListener implements View.OnTouchListener {
@@ -528,7 +540,7 @@ public class MainActivity extends AppCompatActivity {
                             saveBallBase64(DEFAULT_BALL);
                             updateBallTexture(DEFAULT_BALL);
                             syncTextureToWebView(DEFAULT_BALL);
-                            Toast.makeText(MainActivity.this, "已恢復預設圖案", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, "已恢复默认图案", Toast.LENGTH_SHORT).show();
                         }
                     } else {
                         lastBallY = ballLayoutParams.y;
@@ -540,7 +552,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // 6. JavaScript 互動橋樑
+    // 6. JavaScript 互动桥梁
     // ==========================================
 
     @Keep

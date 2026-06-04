@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>分級靈敏度硬體分離演算板 - 修復版</title>
+    <title>双沙盒智能手写板</title>
 
     <style>
         * {
@@ -14,7 +14,8 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        html, body {
+        html,
+        body {
             width: 100%;
             height: 100%;
             overflow: hidden;
@@ -31,20 +32,20 @@
             background: transparent !important;
         }
 
-        /* 懸浮膠囊工具欄 */
+        /* 工具栏基础样式：将工具栏底色直接锁死为纯白色（实色），去除了毛玻璃半透明 */
         .toolbar {
             position: absolute;
             top: env(safe-area-inset-top, 16px);
             left: 16px;
             right: 16px;
             margin: 0 auto;
-            padding: 10px 14px;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            border-radius: 16px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            padding: 10px 16px;
+            background: #FFFFFF !important;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-top: 1.5px solid rgba(0, 0, 0, 0.04);
+            border-radius: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05),
+                0 20px 40px -5px rgba(0, 0, 0, 0.12);
             display: flex;
             flex-wrap: nowrap;
             gap: 16px;
@@ -65,7 +66,7 @@
             gap: 8px;
             flex-shrink: 0;
             padding-right: 12px;
-            border-right: 1px solid rgba(0,0,0,0.08);
+            border-right: 1px solid rgba(0, 0, 0, 0.06);
             position: relative;
         }
 
@@ -87,6 +88,7 @@
             letter-spacing: -1px;
             padding-right: 4px;
             touch-action: none;
+            transition: color 0.2s;
         }
 
         .drag-handle:active {
@@ -103,66 +105,264 @@
 
         button {
             border: none;
-            background: #eef1f5;
+            background: rgba(0, 0, 0, 0.04);
             padding: 8px 16px;
             border-radius: 999px;
             font-size: 14px;
             font-weight: 600;
-            color: #2563eb;
+            color: #334155;
             cursor: pointer;
             text-align: center;
             white-space: nowrap;
-            transition: all 0.15s ease;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
         button.active {
             background: #2563eb;
             color: #fff;
-            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
         }
 
         button:active {
-            transform: scale(0.95);
+            transform: scale(0.92);
+            filter: brightness(0.95);
         }
 
         .color {
             width: 28px;
             height: 28px;
             border-radius: 50%;
-            border: 2px solid #fff;
+            border: 2px solid rgba(255, 255, 255, 0.8);
             cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
-            transition: transform 0.1s;
-        }
-
-        .color.active {
-            transform: scale(1.15);
-            outline: 2px solid #2563eb;
-            outline-offset: 1px;
-        }
-
-        .range-wrap {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: #eef1f5;
-            padding: 6px 14px;
-            border-radius: 999px;
-            font-size: 13px;
-            font-weight: 600;
-            color: #555;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s, outline 0.2s;
             flex-shrink: 0;
         }
 
-        input[type=range] {
-            accent-color: #2563eb;
-            height: 4px;
+        .color.active {
+            transform: scale(1.2);
+            outline: 2px solid #2563eb;
+            outline-offset: 3px;
         }
 
-        #canvasWrap {
+        /* ========== 弹出式大小选择面板 ========== */
+        .size-popup {
+            position: fixed;
+            z-index: 1001;
+            background: #FFFFFF;
+            border-radius: 16px;
+            padding: 14px 18px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 200px;
+            opacity: 0;
+            transform: translateY(-8px);
+            pointer-events: none;
+            transition: opacity 0.22s cubic-bezier(0.25, 1, 0.5, 1),
+                transform 0.22s cubic-bezier(0.25, 1, 0.5, 1);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .size-popup.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .size-popup-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .size-popup-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #64748b;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+
+        .size-popup-value {
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 16px;
+            font-weight: 700;
+            color: #2563eb;
+            white-space: nowrap;
+            min-width: 36px;
+            text-align: right;
+        }
+
+        .size-popup-value .unit {
+            font-size: 11px;
+            font-weight: 600;
+            color: #2563eb;
+            margin-left: 1px;
+        }
+
+        .size-popup-slider-container {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+
+        /* 弹出面板中的短滑块 */
+        #popupSizeSlider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 5px;
+            background: rgba(37, 99, 235, 0.13);
+            border-radius: 999px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        #popupSizeSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #2563eb;
+            box-shadow: 0 2px 10px rgba(37, 99, 235, 0.35);
+            transition: transform 0.12s;
+            cursor: pointer;
+        }
+
+        #popupSizeSlider::-webkit-slider-thumb:active {
+            transform: scale(1.25);
+        }
+
+        .size-popup-presets {
+            display: flex;
+            gap: 6px;
+            justify-content: space-between;
+        }
+
+        .size-preset-dot {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(37, 99, 235, 0.07);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            border: 2px solid transparent;
+            flex-shrink: 0;
+        }
+
+        .size-preset-dot.active-preset {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+            box-shadow: 0 3px 12px rgba(37, 99, 235, 0.35);
+            transform: scale(1.08);
+        }
+
+        .size-preset-dot:active {
+            transform: scale(0.9);
+            filter: brightness(0.9);
+        }
+
+        /* 小三角指示器（指向颜色组） */
+        .size-popup::before {
+            content: '';
+            position: absolute;
+            top: -7px;
+            left: 30px;
+            width: 14px;
+            height: 14px;
+            background: #FFFFFF;
+            transform: rotate(45deg);
+            border-left: 1px solid rgba(0, 0, 0, 0.06);
+            border-top: 1px solid rgba(0, 0, 0, 0.06);
+            border-radius: 2px;
+        }
+
+        /* 双沙盒联动的物理主容器 */
+        .main-container {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
             background: transparent !important;
-            flex: 1;
             z-index: 10;
+            position: relative;
+        }
+
+        .zone-viewport {
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            background: transparent !important;
+            box-sizing: border-box;
+            transition: box-shadow 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        #zone-a.active {
+            box-shadow: inset -20px 0 40px -15px rgba(37, 99, 235, 0.05);
+        }
+
+        #zone-b.active {
+            box-shadow: inset 20px 0 40px -15px rgba(37, 99, 235, 0.05);
+        }
+
+        /* 高級強觀察分屏調節條 */
+        .resizer-bar {
+            width: 32px;
+            margin: 0 -16px;
+            height: 100%;
+            z-index: 100;
+            cursor: col-resize;
+            background: transparent;
+            position: relative;
+            flex-shrink: 0;
+            touch-action: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .resizer-bar::after {
+            content: '';
+            width: 4px;
+            height: 48px;
+            background: rgba(37, 99, 235, 0.5);
+            border-radius: 999px;
+            transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .resizer-bar.active-drag::after {
+            height: 120px;
+            width: 8px;
+            background: #2563eb;
+            box-shadow: 0 0 16px rgba(37, 99, 235, 0.8);
+        }
+
+        .smart-mask {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            backdrop-filter: contrast(85%) brightness(100%) saturate(110%);
+            -webkit-backdrop-filter: contrast(85%) brightness(100%) saturate(110%);
+            background-color: rgba(255, 255, 255, 0.12);
+            pointer-events: none;
+        }
+
+        .canvas-wrapper {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
         }
 
         canvas {
@@ -171,12 +371,34 @@
             display: block;
             touch-action: none;
         }
+
+        /* 响应式：窄屏下弹出面板略窄 */
+        @media (max-width: 420px) {
+            .size-popup {
+                min-width: 170px;
+                padding: 12px 14px;
+                gap: 8px;
+                border-radius: 14px;
+            }
+            .size-popup::before {
+                left: 22px;
+            }
+            .size-preset-dot {
+                width: 24px;
+                height: 24px;
+                font-size: 9px;
+            }
+            #popupSizeSlider::-webkit-slider-thumb {
+                width: 16px;
+                height: 16px;
+            }
+        }
     </style>
 </head>
 
 <body>
 <div id="app">
-    <div class="toolbar">
+    <div class="toolbar" id="mainToolbar">
         <div class="group" id="group-modes">
             <div class="drag-handle">⋮</div>
             <button id="penBtn" class="active">🖊 画笔</button>
@@ -193,12 +415,7 @@
             <div class="color" data-color="#ffffff" style="background:#ffffff; border: 2px solid #ddd;"></div>
         </div>
 
-        <div class="group range-wrap" id="group-sizes">
-            <div class="drag-handle">⋮</div>
-            <span>大小</span>
-            <input id="sizeSlider" type="range" min="4" max="20" step="4" value="4" />
-            <span id="sizeText" style="min-width: 36px;">4 px</span>
-        </div>
+        <!-- 原 group-sizes 已移除，改为弹出面板 -->
 
         <div class="group" id="group-history">
             <div class="drag-handle">⋮</div>
@@ -208,14 +425,48 @@
             <button id="clearBtn" style="color: #64748b;">🗑 清空</button>
         </div>
 
-        <div class="group" style="border-right: none;">
+        <div class="group" id="group-controls" style="border-right: none; padding-right: 0;">
+            <div class="drag-handle">⋮</div>
             <button id="minimizeBtn" style="background: #f59e0b; color: #fff;">➖ 最小化</button>
             <button id="closeBtn" style="background: #ef4444; color: #fff;">❌ 退出</button>
         </div>
     </div>
 
-    <div id="canvasWrap">
-        <canvas id="canvas"></canvas>
+    <!-- 弹出式画笔大小选择面板 -->
+    <div class="size-popup" id="sizePopup">
+        <div class="size-popup-header">
+            <label class="size-popup-label" for="popupSizeSlider">🖌 画笔大小</label>
+            <span class="size-popup-value">
+                    <span id="popupSizeNum">2</span><span class="unit">px</span>
+                </span>
+        </div>
+        <div class="size-popup-slider-container">
+            <input type="range" id="popupSizeSlider" min="0" max="3" value="0" step="1" />
+        </div>
+        <div class="size-popup-presets" id="sizePresets">
+            <div class="size-preset-dot active-preset" data-size-index="0">2</div>
+            <div class="size-preset-dot" data-size-index="1">4</div>
+            <div class="size-preset-dot" data-size-index="2">8</div>
+            <div class="size-preset-dot" data-size-index="3">16</div>
+        </div>
+    </div>
+
+    <div class="main-container" id="mainContainer">
+        <div id="zone-a" class="zone-viewport active" onpointerdown="switchActiveZone('a')">
+            <div class="smart-mask"></div>
+            <div class="canvas-wrapper" id="wrapper-a">
+                <canvas id="canvas-a"></canvas>
+            </div>
+        </div>
+
+        <div class="resizer-bar" id="resizerBar"></div>
+
+        <div id="zone-b" class="zone-viewport" onpointerdown="switchActiveZone('b')">
+            <div class="smart-mask"></div>
+            <div class="canvas-wrapper" id="wrapper-b">
+                <canvas id="canvas-b"></canvas>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -224,94 +475,372 @@
         const DPR = Math.min(window.devicePixelRatio || 1, 2);
         const MIN_SCALE = 0.2;
         const MAX_SCALE = 8;
-        const TOUCH_START_THRESHOLD = 12;
-
-        const canvas = document.getElementById("canvas");
-        const ctx = canvas.getContext("2d", { alpha: true });
+        const TOUCH_START_THRESHOLD = 8;
 
         const penBtn = document.getElementById("penBtn");
         const eraserBtn = document.getElementById("eraserBtn");
         const undoBtn = document.getElementById("undoBtn");
         const redoBtn = document.getElementById("redoBtn");
-        const clearBtn = document.getElementById("clearBtn");
         const centerBtn = document.getElementById("centerBtn");
-        const sizeSlider = document.getElementById("sizeSlider");
-        const sizeText = document.getElementById("sizeText");
+        const clearBtn = document.getElementById("clearBtn");
+        const mainToolbar = document.getElementById("mainToolbar");
+        const mainContainer = document.getElementById("mainContainer");
+        const resizerBar = document.getElementById("resizerBar");
+        const zoneA = document.getElementById("zone-a");
+        const zoneB = document.getElementById("zone-b");
 
-        let strokes = [];
-        let undoStack = [];
-        let redoStack = [];
+        // 弹出面板相关元素
+        const sizePopup = document.getElementById("sizePopup");
+        const popupSizeSlider = document.getElementById("popupSizeSlider");
+        const popupSizeNum = document.getElementById("popupSizeNum");
+        const sizePresetsContainer = document.getElementById("sizePresets");
+        const groupColors = document.getElementById("group-colors");
 
-        let currentStroke = null;
-        let mode = "pen";
-        let currentColor = "#000000";
-        let currentSize = 4;
-        let eraserCursor = null;
-
-        let scale = 1;
-        let offsetX = 0;
-        let offsetY = 0;
-
-        let pointers = new Map();
-        let isDrawing = false;
-        let touchStartPoint = null;
-
-        let pinchStartDist = 0;
-        let pinchStartScale = 1;
-        let pinchStartCenter = { x: 0, y: 0 };
-        let pinchStartOffset = { x: 0, y: 0 };
-
-        // 膠囊工具欄拖拽邏輯变量
-        const toolbar = document.querySelector('.toolbar');
         let draggingGroup = null;
 
+        // 初始分屏比例為黃金分割比例 0.618
+        let splitRatio = 0.618;
+
+        // 4档离散大小绝对值映射表
+        const SIZE_STEPS = [2, 4, 8, 16];
+
+        let toolbarState = {
+            mode: "pen",
+            color: "#000000",
+            size: SIZE_STEPS[0] // 默认 2px
+        };
+
+        // 弹出面板显示状态
+        let isPopupVisible = false;
+
+        const zones = {
+            a: {
+                id: 'a',
+                dom: zoneA,
+                canvas: document.getElementById("canvas-a"),
+                ctx: document.getElementById("canvas-a").getContext("2d", { alpha: true }),
+                strokes: [],
+                undoStack: [],
+                redoStack: [],
+                currentStroke: null,
+                scale: 1,
+                offsetX: 0,
+                offsetY: 0,
+                pointers: new Map(),
+                isDrawing: false,
+                touchStartPoint: null,
+                pinchStartDist: 0,
+                pinchStartScale: 1,
+                pinchStartCenter: { x: 0, y: 0 },
+                pinchStartOffset: { x: 0, y: 0 },
+                eraserCursor: null
+            },
+            b: {
+                id: 'b',
+                dom: zoneB,
+                canvas: document.getElementById("canvas-b"),
+                ctx: document.getElementById("canvas-b").getContext("2d", { alpha: true }),
+                strokes: [],
+                undoStack: [],
+                redoStack: [],
+                currentStroke: null,
+                scale: 1,
+                offsetX: 0,
+                offsetY: 0,
+                pointers: new Map(),
+                isDrawing: false,
+                touchStartPoint: null,
+                pinchStartDist: 0,
+                pinchStartScale: 1,
+                pinchStartCenter: { x: 0, y: 0 },
+                pinchStartOffset: { x: 0, y: 0 },
+                eraserCursor: null
+            }
+        };
+
+        let activeZoneId = 'a';
+
+        function switchActiveZone(zoneId) {
+            if (activeZoneId === zoneId) return;
+            activeZoneId = zoneId;
+            document.querySelectorAll('.zone-viewport').forEach(el => el.classList.remove('active'));
+            zones[zoneId].dom.classList.add('active');
+        }
+        window.switchActiveZone = switchActiveZone;
+
+        // ========== 弹出面板逻辑 ==========
+        function getSizeStepIndex(sizeValue) {
+            const idx = SIZE_STEPS.indexOf(sizeValue);
+            return idx >= 0 ? idx : 0;
+        }
+
+        function syncPopupToState() {
+            const stepIndex = getSizeStepIndex(toolbarState.size);
+            popupSizeSlider.value = stepIndex;
+            popupSizeNum.textContent = toolbarState.size;
+            // 更新预设圆点状态
+            document.querySelectorAll('.size-preset-dot').forEach(dot => {
+                const dotIndex = parseInt(dot.getAttribute('data-size-index'), 10);
+                if (dotIndex === stepIndex) {
+                    dot.classList.add('active-preset');
+                } else {
+                    dot.classList.remove('active-preset');
+                }
+            });
+        }
+
+        function showSizePopup() {
+            syncPopupToState();
+            positionPopup();
+            sizePopup.classList.add('visible');
+            isPopupVisible = true;
+        }
+
+        function hideSizePopup() {
+            sizePopup.classList.remove('visible');
+            isPopupVisible = false;
+        }
+
+        function toggleSizePopup() {
+            if (isPopupVisible) {
+                hideSizePopup();
+            } else {
+                showSizePopup();
+            }
+        }
+
+        function positionPopup() {
+            const colorGroupRect = groupColors.getBoundingClientRect();
+            const popupWidth = sizePopup.offsetWidth || 200;
+            const popupHeight = sizePopup.offsetHeight || 130;
+
+            // 默认将弹出面板放在颜色组下方，左对齐颜色组
+            let top = colorGroupRect.bottom + 10;
+            let left = colorGroupRect.left;
+
+            // 边界检查：右侧不超出viewport
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            if (left + popupWidth > viewportWidth - 12) {
+                left = viewportWidth - popupWidth - 12;
+            }
+            if (left < 12) {
+                left = 12;
+            }
+
+            // 边界检查：下方空间不足则放到颜色组上方
+            if (top + popupHeight > viewportHeight - 20) {
+                top = colorGroupRect.top - popupHeight - 10;
+                // 如果上方也不够，则贴近顶部
+                if (top < 8) {
+                    top = 8;
+                }
+            }
+
+            sizePopup.style.top = top + 'px';
+            sizePopup.style.left = left + 'px';
+
+            // 更新小三角位置（使其指向颜色组中心）
+            const arrowLeft = Math.max(16, Math.min(colorGroupRect.left + colorGroupRect.width / 2 - left - 7, popupWidth - 30));
+            sizePopup.style.setProperty('--arrow-left', arrowLeft + 'px');
+            // 动态调整 ::before 的 left
+            const styleId = 'popup-arrow-style';
+            let styleEl = document.getElementById(styleId);
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = styleId;
+                document.head.appendChild(styleEl);
+            }
+            styleEl.textContent = `.size-popup::before { left: ${arrowLeft}px !important; }`;
+        }
+
+        // 弹出面板滑块事件
+        popupSizeSlider.addEventListener('input', (e) => {
+            const stepIndex = parseInt(e.target.value, 10);
+            toolbarState.size = SIZE_STEPS[stepIndex];
+            popupSizeNum.textContent = toolbarState.size;
+            // 同步预设圆点
+            document.querySelectorAll('.size-preset-dot').forEach(dot => {
+                const dotIndex = parseInt(dot.getAttribute('data-size-index'), 10);
+                dot.classList.toggle('active-preset', dotIndex === stepIndex);
+            });
+        });
+
+        // 预设圆点点击事件
+        sizePresetsContainer.addEventListener('click', (e) => {
+            const dot = e.target.closest('.size-preset-dot');
+            if (!dot) return;
+            const stepIndex = parseInt(dot.getAttribute('data-size-index'), 10);
+            toolbarState.size = SIZE_STEPS[stepIndex];
+            popupSizeSlider.value = stepIndex;
+            popupSizeNum.textContent = toolbarState.size;
+            document.querySelectorAll('.size-preset-dot').forEach(d => {
+                const di = parseInt(d.getAttribute('data-size-index'), 10);
+                d.classList.toggle('active-preset', di === stepIndex);
+            });
+        });
+
+        // 阻止弹出面板内的点击冒泡到document（防止误关闭）
+        sizePopup.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+        });
+        sizePopup.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        // 工具栏滚动时关闭弹出面板
+        mainToolbar.addEventListener('scroll', () => {
+            if (isPopupVisible) {
+                hideSizePopup();
+            }
+        }, { passive: true });
+
+        // window resize / orientationchange 时关闭弹出面板
+        window.addEventListener('resize', () => {
+            if (isPopupVisible) {
+                hideSizePopup();
+            }
+        });
+        window.addEventListener('orientationchange', () => {
+            if (isPopupVisible) {
+                hideSizePopup();
+            }
+            setTimeout(resizeCanvas, 200);
+        });
+
+        // document级点击：点击弹出面板和颜色按钮之外的地方关闭面板
+        document.addEventListener('click', (e) => {
+            if (!isPopupVisible) return;
+            // 检查点击是否在弹出面板内
+            if (sizePopup.contains(e.target)) return;
+            // 检查点击是否在颜色按钮上
+            if (e.target.closest('.color') && e.target.closest('#group-colors')) return;
+            // 检查点击是否在颜色组的drag-handle上
+            if (e.target.closest('#group-colors .drag-handle')) return;
+            // 其他情况关闭面板
+            hideSizePopup();
+        });
+
+        // 颜色按钮点击事件（修改：集成弹出面板显示）
+        document.querySelectorAll("#group-colors .color").forEach((el) => {
+            el.addEventListener('click', (e) => {
+                // 切换颜色
+                document.querySelectorAll("#group-colors .color").forEach((c) => c.classList
+                    .remove("active"));
+                el.classList.add("active");
+                toolbarState.color = el.getAttribute("data-color");
+
+                // 显示弹出面板（如果已隐藏）
+                if (!isPopupVisible) {
+                    showSizePopup();
+                } else {
+                    // 如果已显示，更新位置（颜色组可能因滚动而移动）
+                    positionPopup();
+                }
+            });
+        });
+
         function resizeCanvas() {
-            const width = window.innerWidth;
+            const totalWidth = window.innerWidth;
             const height = window.innerHeight;
-            if (width <= 0 || height <= 0) return; // 💡 防御：防止后台切换时产生的 0 尺寸破坏布局
-            canvas.width = width * DPR;
-            canvas.height = height * DPR;
-            canvas.style.width = width + "px";
-            canvas.style.height = height + "px";
-            requestRender();
+            if (totalWidth <= 0 || height <= 0) return;
+
+            const widthA = totalWidth * splitRatio;
+            const widthB = totalWidth * (1 - splitRatio);
+
+            zoneA.style.flex = `0 0 ${widthA}px`;
+            zoneB.style.flex = `0 0 ${widthB}px`;
+
+            Object.values(zones).forEach(z => {
+                const currentWidth = z.id === 'a' ? widthA : widthB;
+
+                z.canvas.width = currentWidth * DPR;
+                z.canvas.height = height * DPR;
+                z.canvas.style.width = currentWidth + "px";
+                z.canvas.style.height = height + "px";
+
+                requestRender(z);
+            });
+
+            // 如果弹出面板可见，更新其位置
+            if (isPopupVisible) {
+                requestAnimationFrame(() => positionPopup());
+            }
         }
         window.resizeCanvas = resizeCanvas;
 
-        // 💡【核心重置防护】：强行斩断一切多线程/异步引起的未释放触摸状态
-        function forceResetAllStates() {
-            isDrawing = false;
-            touchStartPoint = null;
-            eraserCursor = null;
-            currentStroke = null;
-            pointers.clear();
+        // 💡 核心重构：弃用 touchstart/touchmove，升级为全指针捕获的高级精准触控生命周期
+        resizerBar.addEventListener('pointerdown', (e) => {
+            if (!e.isPrimary) return;
+            forceResetAllStates();
 
+            resizerBar.classList.add('active-drag');
+
+            try {
+                resizerBar.setPointerCapture(e.pointerId);
+            } catch (_) {}
+        });
+
+        resizerBar.addEventListener('pointermove', (e) => {
+            if (!resizerBar.classList.contains('active-drag')) return;
+
+            const touchX = e.clientX;
+            const totalWidth = window.innerWidth;
+
+            let newRatio = touchX / totalWidth;
+            if (newRatio < 0.2) newRatio = 0.2;
+            if (newRatio > 0.8) newRatio = 0.8;
+
+            splitRatio = newRatio;
+            resizeCanvas();
+        });
+
+        const endResizeDrag = (e) => {
+            if (resizerBar.classList.contains('active-drag')) {
+                resizerBar.classList.remove('active-drag');
+                try {
+                    resizerBar.releasePointerCapture(e.pointerId);
+                } catch (_) {}
+            }
+        };
+
+        resizerBar.addEventListener('pointerup', endResizeDrag);
+        resizerBar.addEventListener('pointercancel', endResizeDrag);
+
+        resizerBar.addEventListener('dblclick', () => {
+            splitRatio = 0.618;
+            resizeCanvas();
+        });
+
+        function forceResetAllStates() {
+            Object.values(zones).forEach(z => {
+                z.isDrawing = false;
+                z.touchStartPoint = null;
+                z.eraserCursor = null;
+                z.currentStroke = null;
+                z.pointers.clear();
+                requestRender(z);
+            });
             if (draggingGroup) {
                 draggingGroup.classList.remove('dragging');
                 draggingGroup = null;
             }
-            requestRender();
         }
 
         window.onAppMaximized = () => {
-            console.log("[Native->Web] 恢复前台，清理冗余状态并延迟重绘");
             forceResetAllStates();
-            // 💡 延迟 60ms 等待 Android 视口动画完全伸展，防止读取错误的宽高
             setTimeout(resizeCanvas, 60);
         };
 
-        window.onNativeBallTextureSynced = (base64Data) => {
-            console.log("[Native->Web] 懸浮球圖案已同步");
-        };
-
-        function screenToWorld(clientX, clientY) {
-            const rect = canvas.getBoundingClientRect();
+        function screenToWorld(clientX, clientY, zone) {
+            const rect = zone.canvas.getBoundingClientRect();
             return {
-                x: (clientX - rect.left - offsetX) / scale,
-                y: (clientY - rect.top - offsetY) / scale,
+                x: (clientX - rect.left - zone.offsetX) / zone.scale,
+                y: (clientY - rect.top - zone.offsetY) / zone.scale,
             };
         }
 
-        function drawStroke(ctx, stroke) {
+        function drawStroke(ctx, stroke, zone) {
             if (!stroke || !stroke.points || stroke.points.length === 0) return;
             ctx.save();
             ctx.lineCap = "round";
@@ -319,10 +848,7 @@
             ctx.strokeStyle = stroke.color;
             ctx.lineWidth = stroke.size;
 
-            if (stroke.color.toLowerCase() === "#ffffff") {
-                ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-                ctx.shadowBlur = 4;
-            }
+            ctx.shadowBlur = 0;
 
             ctx.beginPath();
             if (stroke.points.length === 1) {
@@ -347,24 +873,28 @@
         }
 
         function pointToLineDistance(px, py, x1, y1, x2, y2) {
-            const A = px - x1, B = py - y1, C = x2 - x1, D = y2 - y1;
+            const A = px - x1,
+                B = py - y1,
+                C = x2 - x1,
+                D = y2 - y1;
             const dot = A * C + B * D;
             const lenSq = C * C + D * D;
             let param = -1;
             if (lenSq !== 0) param = dot / lenSq;
             let xx, yy;
-            if (param < 0) { xx = x1; yy = y1; }
-            else if (param > 1) { xx = x2; yy = y2; }
-            else { xx = x1 + param * C; yy = y1 + param * D; }
+            if (param < 0) { xx = x1;
+                yy = y1; } else if (param > 1) { xx = x2;
+                yy = y2; } else { xx = x1 + param * C;
+                yy = y1 + param * D; }
             return Math.hypot(px - xx, py - yy);
         }
 
-        function eraseStrokesAt(worldPoint) {
-            const eraserRadius = (currentSize * 1.5) / scale;
+        function eraseStrokesAt(worldPoint, zone) {
+            const eraserRadius = (toolbarState.size * 2.5) / zone.scale;
             let changed = false;
 
-            for (let i = strokes.length - 1; i >= 0; i--) {
-                const stroke = strokes[i];
+            for (let i = zone.strokes.length - 1; i >= 0; i--) {
+                const stroke = zone.strokes[i];
                 if (stroke.points.length === 0) continue;
 
                 const xs = stroke.points.map(p => p.x);
@@ -374,320 +904,314 @@
                     continue;
                 }
 
+                if (stroke.points.length === 1) {
+                    if (Math.hypot(worldPoint.x - stroke.points[0].x, worldPoint.y - stroke.points[0].y) <=
+                        eraserRadius) {
+                        const removed = zone.strokes.splice(i, 1)[0];
+                        zone.undoStack.push({ type: "erase", stroke: removed, index: i });
+                        zone.redoStack = [];
+                        changed = true;
+                    }
+                    continue;
+                }
+
                 for (let j = 0; j < stroke.points.length - 1; j++) {
-                    if (pointToLineDistance(worldPoint.x, worldPoint.y, stroke.points[j].x, stroke.points[j].y, stroke.points[j+1].x, stroke.points[j+1].y) <= eraserRadius) {
-                        const removed = strokes.splice(i, 1)[0];
-                        undoStack.push({ type: "erase", stroke: removed, index: i });
-                        redoStack = [];
+                    if (pointToLineDistance(worldPoint.x, worldPoint.y, stroke.points[j].x, stroke.points[j].y, stroke
+                            .points[j + 1].x, stroke.points[j + 1].y) <= eraserRadius) {
+                        const removed = zone.strokes.splice(i, 1)[0];
+                        zone.undoStack.push({ type: "erase", stroke: removed, index: i });
+                        zone.redoStack = [];
                         changed = true;
                         break;
                     }
                 }
             }
-            if (changed) requestRender();
+            if (changed) requestRender(zone);
         }
 
-        let renderPending = false;
-        function requestRender() {
-            if (renderPending) return;
-            renderPending = true;
-            requestAnimationFrame(() => { renderPending = false; render(); });
+        const renderFlags = { a: false, b: false };
+
+        function requestRender(zone) {
+            if (renderFlags[zone.id]) return;
+            renderFlags[zone.id] = true;
+            requestAnimationFrame(() => {
+                renderFlags[zone.id] = false;
+                render(zone);
+            });
         }
 
-        function render() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        function render(zone) {
+            const ctx = zone.ctx;
+            ctx.clearRect(0, 0, zone.canvas.width, zone.canvas.height);
             ctx.save();
             ctx.scale(DPR, DPR);
-            ctx.translate(offsetX, offsetY);
-            ctx.scale(scale, scale);
 
-            for (const s of strokes) drawStroke(ctx, s);
-            if (currentStroke) drawStroke(ctx, currentStroke);
+            ctx.translate(zone.offsetX, zone.offsetY);
+            ctx.scale(zone.scale, zone.scale);
 
-            if (mode === "eraser" && eraserCursor) {
+            for (const s of zone.strokes) drawStroke(ctx, s, zone);
+            if (zone.currentStroke) drawStroke(ctx, zone.currentStroke, zone);
+
+            if (toolbarState.mode === "eraser" && zone.eraserCursor) {
                 ctx.save();
+                const eraserRadius = (toolbarState.size * 2.5) / zone.scale;
+
                 ctx.beginPath();
-                const eraserRadius = (currentSize * 1.5) / scale;
-                ctx.arc(eraserCursor.x, eraserCursor.y, eraserRadius, 0, Math.PI * 2);
-                ctx.fillStyle = "rgba(148, 163, 184, 0.35)";
-                ctx.fill();
-                ctx.lineWidth = 1.2 / scale;
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+                ctx.arc(zone.eraserCursor.x, zone.eraserCursor.y, eraserRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = "rgba(37, 99, 235, 0.75)";
+                ctx.lineWidth = 1.5 / zone.scale;
+                ctx.setLineDash([4 / zone.scale, 3 / zone.scale]);
                 ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(zone.eraserCursor.x, zone.eraserCursor.y, eraserRadius, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(37, 99, 235, 0.08)";
+                ctx.fill();
+
                 ctx.restore();
             }
             ctx.restore();
         }
 
-        function finishStroke() {
-            if (!currentStroke) return;
-            strokes.push(currentStroke);
-            undoStack.push({ type: "add", stroke: currentStroke });
-            redoStack = [];
-            currentStroke = null;
-            requestRender();
+        function finishStroke(zone) {
+            if (!zone.currentStroke) return;
+            zone.strokes.push(zone.currentStroke);
+            zone.undoStack.push({ type: "add", stroke: zone.currentStroke });
+            zone.redoStack = [];
+            zone.currentStroke = null;
+            requestRender(zone);
         }
 
-        function onPointerDown(e) {
-            pointers.set(e.pointerId, e);
+        function setupSandboxEvents(zone) {
+            const el = zone.canvas;
 
-            if (e.pointerType === "pen") {
-                // 💡 加上 try-catch 防御：防止快速后台切换导致的 DOMException 指针失效
-                try { canvas.setPointerCapture(e.pointerId); } catch(_) {}
-                const world = screenToWorld(e.clientX, e.clientY);
-                isDrawing = true;
-                touchStartPoint = null;
+            el.addEventListener("pointerdown", (e) => {
+                switchActiveZone(zone.id);
+                zone.pointers.set(e.pointerId, e);
 
-                if (mode === "eraser") {
-                    eraserCursor = world;
-                    eraseStrokesAt(world);
-                } else {
-                    currentStroke = { type: "pen", color: currentColor, size: currentSize, points: [world] };
-                    requestRender();
+                if (e.pointerType === "pen") {
+                    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+                    const world = screenToWorld(e.clientX, e.clientY, zone);
+                    zone.isDrawing = true;
+                    zone.touchStartPoint = null;
+
+                    if (toolbarState.mode === "eraser") {
+                        zone.eraserCursor = world;
+                        eraseStrokesAt(world, zone);
+                    } else {
+                        zone.currentStroke = { type: "pen", color: toolbarState.color, size: toolbarState.size,
+                            points: [world] };
+                        requestRender(zone);
+                    }
+                    return;
                 }
-                return;
-            }
 
-            if (e.pointerType === "touch") {
-                const touchPointers = [...pointers.values()].filter(p => p.pointerType === "touch");
+                if (e.pointerType === "touch") {
+                    const touchPointers = [...zone.pointers.values()].filter(p => p.pointerType === "touch");
+                    if (touchPointers.length >= 2) {
+                        if (zone.isDrawing && zone.currentStroke) { finishStroke(zone); }
+                        zone.isDrawing = false;
+                        zone.touchStartPoint = null;
+                        zone.eraserCursor = null;
+
+                        const pts = touchPointers;
+                        zone.pinchStartDist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1]
+                            .clientY);
+                        zone.pinchStartScale = zone.scale;
+                        zone.pinchStartCenter = { x: (pts[0].clientX + pts[1].clientX) / 2, y: (pts[0].clientY + pts[
+                                1].clientY) / 2 };
+                        zone.pinchStartOffset = { x: zone.offsetX, y: zone.offsetY };
+                    } else {
+                        zone.isDrawing = false;
+                        zone.touchStartPoint = { clientX: e.clientX, clientY: e.clientY };
+                    }
+                }
+            });
+
+            el.addEventListener("pointermove", (e) => {
+                if (!zone.pointers.has(e.pointerId)) return;
+                zone.pointers.set(e.pointerId, e);
+
+                if (e.pointerType === "pen" && zone.isDrawing) {
+                    const world = screenToWorld(e.clientX, e.clientY, zone);
+                    if (toolbarState.mode === "eraser") {
+                        zone.eraserCursor = world;
+                        eraseStrokesAt(world, zone);
+                        requestRender(zone);
+                    } else if (zone.currentStroke) {
+                        const last = zone.currentStroke.points[zone.currentStroke.points.length - 1];
+                        if (Math.hypot(world.x - last.x, world.y - last.y) < 1.2) return;
+                        zone.currentStroke.points.push(world);
+                        requestRender(zone);
+                    }
+                    return;
+                }
+
+                const touchPointers = [...zone.pointers.values()].filter(p => p.pointerType === "touch");
 
                 if (touchPointers.length >= 2) {
-                    if (isDrawing && currentStroke) { finishStroke(); }
-                    isDrawing = false;
-                    touchStartPoint = null;
-                    eraserCursor = null;
-
                     const pts = touchPointers;
-                    pinchStartDist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
-                    pinchStartScale = scale;
-                    pinchStartCenter = { x: (pts[0].clientX + pts[1].clientX) / 2, y: (pts[0].clientY + pts[1].clientY) / 2 };
-                    pinchStartOffset = { x: offsetX, y: offsetY };
-                } else {
-                    isDrawing = false;
-                    touchStartPoint = { clientX: e.clientX, clientY: e.clientY };
+                    const dist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
+                    let newScale = zone.pinchStartScale * (dist / (zone.pinchStartDist || 1));
+                    newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
+
+                    const currentCenter = { x: (pts[0].clientX + pts[1].clientX) / 2, y: (pts[0].clientY + pts[1]
+                            .clientY) / 2 };
+                    const rect = zone.canvas.getBoundingClientRect();
+                    const originTransformX = (zone.pinchStartCenter.x - rect.left - zone.pinchStartOffset.x) / zone
+                        .pinchStartScale;
+                    const originTransformY = (zone.pinchStartCenter.y - rect.top - zone.pinchStartOffset.y) / zone
+                        .pinchStartScale;
+
+                    zone.scale = newScale;
+                    zone.offsetX = (currentCenter.x - rect.left) - originTransformX * zone.scale;
+                    zone.offsetY = (currentCenter.y - rect.top) - originTransformY * zone.scale;
+
+                    requestRender(zone);
+                    return;
                 }
-            }
-        }
 
-        function onPointerMove(e) {
-            if (!pointers.has(e.pointerId)) return;
-            pointers.set(e.pointerId, e);
-
-            if (e.pointerType === "pen" && isDrawing) {
-                const world = screenToWorld(e.clientX, e.clientY);
-                if (mode === "eraser") {
-                    eraserCursor = world;
-                    eraseStrokesAt(world);
-                    requestRender();
-                } else if (currentStroke) {
-                    const last = currentStroke.points[currentStroke.points.length - 1];
-                    if (Math.hypot(world.x - last.x, world.y - last.y) < 1.5) return;
-                    currentStroke.points.push(world);
-                    requestRender();
-                }
-                return;
-            }
-
-            const touchPointers = [...pointers.values()].filter(p => p.pointerType === "touch");
-            if (touchPointers.length >= 2) {
-                const pts = touchPointers;
-                const dist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
-                let newScale = pinchStartScale * (dist / (pinchStartDist || 1));
-                newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
-
-                const currentCenter = { x: (pts[0].clientX + pts[1].clientX) / 2, y: (pts[0].clientY + pts[1].clientY) / 2 };
-                const rect = canvas.getBoundingClientRect();
-                const originTransformX = (pinchStartCenter.x - rect.left - pinchStartOffset.x) / pinchStartScale;
-                const originTransformY = (pinchStartCenter.y - rect.top - pinchStartOffset.y) / pinchStartScale;
-
-                scale = newScale;
-                offsetX = (currentCenter.x - rect.left) - originTransformX * scale;
-                offsetY = (currentCenter.y - rect.top) - originTransformY * scale;
-                requestRender();
-                return;
-            }
-
-            if (e.pointerType === "touch" && touchPointers.length === 1) {
-                if (isDrawing) {
-                    const world = screenToWorld(e.clientX, e.clientY);
-                    if (mode === "eraser") {
-                        eraserCursor = world;
-                        eraseStrokesAt(world);
-                        requestRender();
-                    } else if (currentStroke) {
-                        const last = currentStroke.points[currentStroke.points.length - 1];
-                        if (Math.hypot(world.x - last.x, world.y - last.y) < 1.5) return;
-                        currentStroke.points.push(world);
-                        requestRender();
-                    }
-                }
-                else if (touchStartPoint) {
-                    const moveDist = Math.hypot(e.clientX - touchStartPoint.clientX, e.clientY - touchStartPoint.clientY);
-
-                    if (moveDist >= TOUCH_START_THRESHOLD) {
-                        // 💡 try-catch 防御
-                        try { canvas.setPointerCapture(e.pointerId); } catch(_) {}
-                        isDrawing = true;
-
-                        const startWorld = screenToWorld(touchStartPoint.clientX, touchStartPoint.clientY);
-                        const currentWorld = screenToWorld(e.clientX, e.clientY);
-
-                        if (mode === "eraser") {
-                            eraserCursor = currentWorld;
-                            eraseStrokesAt(currentWorld);
-                        } else {
-                            currentStroke = {
-                                type: "pen",
-                                color: currentColor,
-                                size: currentSize,
-                                points: [startWorld, currentWorld]
-                            };
+                if (e.pointerType === "touch" && touchPointers.length === 1) {
+                    if (zone.isDrawing) {
+                        const world = screenToWorld(e.clientX, e.clientY, zone);
+                        if (toolbarState.mode === "eraser") {
+                            zone.eraserCursor = world;
+                            eraseStrokesAt(world, zone);
+                            requestRender(zone);
+                        } else if (zone.currentStroke) {
+                            const last = zone.currentStroke.points[zone.currentStroke.points.length - 1];
+                            if (Math.hypot(world.x - last.x, world.y - last.y) < 1.2) return;
+                            zone.currentStroke.points.push(world);
+                            requestRender(zone);
                         }
-                        touchStartPoint = null;
-                        requestRender();
+                    } else if (zone.touchStartPoint) {
+                        const moveDist = Math.hypot(e.clientX - zone.touchStartPoint.clientX, e.clientY - zone
+                            .touchStartPoint.clientY);
+                        if (moveDist >= TOUCH_START_THRESHOLD) {
+                            try { el.setPointerCapture(e.pointerId); } catch (_) {}
+                            zone.isDrawing = true;
+
+                            const startWorld = screenToWorld(zone.touchStartPoint.clientX, zone.touchStartPoint
+                                .clientY, zone);
+                            const currentWorld = screenToWorld(e.clientX, e.clientY, zone);
+
+                            if (toolbarState.mode === "eraser") {
+                                zone.eraserCursor = currentWorld;
+                                eraseStrokesAt(currentWorld, zone);
+                            } else {
+                                zone.currentStroke = {
+                                    type: "pen",
+                                    color: toolbarState.color,
+                                    size: toolbarState.size,
+                                    points: [startWorld, currentWorld]
+                                };
+                            }
+                            zone.touchStartPoint = null;
+                            requestRender(zone);
+                        }
                     }
                 }
-            }
-        }
+            });
 
-        function onPointerUp(e) {
-            if (pointers.has(e.pointerId)) {
-                try { canvas.releasePointerCapture(e.pointerId); } catch(err){}
-                pointers.delete(e.pointerId);
-            }
-            if (isDrawing) {
-                finishStroke();
-            }
-            isDrawing = false;
-            touchStartPoint = null;
-            eraserCursor = null;
-            requestRender();
+            const onUp = (e) => {
+                if (zone.pointers.has(e.pointerId)) {
+                    try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+                    zone.pointers.delete(e.pointerId);
+                }
+                if (zone.isDrawing) {
+                    finishStroke(zone);
+                }
+                if (zone.touchStartPoint && toolbarState.mode === "eraser") {
+                    const world = screenToWorld(zone.touchStartPoint.clientX, zone.touchStartPoint.clientY, zone);
+                    eraseStrokesAt(world, zone);
+                }
+                zone.isDrawing = false;
+                zone.touchStartPoint = null;
+                zone.eraserCursor = null;
+                requestRender(zone);
+            };
+
+            el.addEventListener("pointerup", onUp);
+            el.addEventListener("pointercancel", onUp);
         }
 
         function undo() {
-            if (undoStack.length === 0) return;
-            const action = undoStack.pop();
-            redoStack.push(action);
+            const z = zones[activeZoneId];
+            if (z.undoStack.length === 0) return;
+            const action = z.undoStack.pop();
+            z.redoStack.push(action);
 
-            if (action.type === "add") {
-                strokes.pop();
-            } else if (action.type === "erase") {
-                strokes.splice(action.index, 0, action.stroke);
-            } else if (action.type === "clear") {
-                strokes = [...action.oldStrokes];
-            }
-            requestRender();
+            if (action.type === "add") { z.strokes.pop(); } else if (action.type === "erase") { z.strokes.splice(action
+                    .index, 0, action.stroke); } else if (action.type === "clear") { z.strokes = [...action
+                    .oldStrokes]; }
+            requestRender(z);
         }
 
         function redo() {
-            if (redoStack.length === 0) return;
-            const action = redoStack.pop();
-            undoStack.push(action);
+            const z = zones[activeZoneId];
+            if (z.redoStack.length === 0) return;
+            const action = z.redoStack.pop();
+            z.undoStack.push(action);
 
-            if (action.type === "add") {
-                strokes.push(action.stroke);
-            } else if (action.type === "erase") {
-                strokes.splice(action.index, 1);
-            } else if (action.type === "clear") {
-                strokes = [];
-            }
-            requestRender();
+            if (action.type === "add") { z.strokes.push(action.stroke); } else if (action.type === "erase") { z.strokes
+                    .splice(action.index, 1); } else if (action.type === "clear") { z.strokes = []; }
+            requestRender(z);
         }
 
-        function centerView() { scale = 1; offsetX = 0; offsetY = 0; requestRender(); }
+        function centerView() {
+            const z = zones[activeZoneId];
+            z.scale = 1;
+            z.offsetX = 0;
+            z.offsetY = 0;
+            requestRender(z);
+        }
 
         function clearAll() {
-            if (strokes.length === 0) return;
-            undoStack.push({ type: "clear", oldStrokes: [...strokes] });
-            redoStack = [];
-            strokes = [];
-            requestRender();
+            const z = zones[activeZoneId];
+            if (z.strokes.length === 0) return;
+            z.undoStack.push({ type: "clear", oldStrokes: [...z.strokes] });
+            z.redoStack = [];
+            z.strokes = [];
+            requestRender(z);
         }
 
-        penBtn.onclick = () => { mode = "pen"; penBtn.classList.add("active"); eraserBtn.classList.remove("active"); };
-        eraserBtn.onclick = () => { mode = "eraser"; eraserBtn.classList.add("active"); penBtn.classList.remove("active"); };
+        penBtn.onclick = () => {
+            toolbarState.mode = "pen";
+            penBtn.classList.add("active");
+            eraserBtn.classList.remove("active");
+        };
+        eraserBtn.onclick = () => {
+            toolbarState.mode = "eraser";
+            eraserBtn.classList.add("active");
+            penBtn.classList.remove("active");
+        };
 
-        document.querySelectorAll(".color").forEach((el) => {
-            el.onclick = () => {
-                document.querySelectorAll(".color").forEach((c) => c.classList.remove("active"));
-                el.classList.add("active");
-                currentColor = el.dataset.color;
-                mode = "pen";
-                penBtn.classList.add("active"); eraserBtn.classList.remove("active");
-            };
-        });
-
-        sizeSlider.oninput = (e) => { currentSize = parseInt(e.target.value); sizeText.innerText = currentSize + " px"; };
-        undoBtn.onclick = undo; redoBtn.onclick = redo; clearBtn.onclick = clearAll; centerBtn.onclick = centerView;
+        undoBtn.onclick = undo;
+        redoBtn.onclick = redo;
+        centerBtn.onclick = centerView;
+        clearBtn.onclick = clearAll;
 
         document.getElementById("minimizeBtn").onclick = () => {
-            forceResetAllStates(); // 💡 最小化前强行清理所有高频事件流
-            if (window.AndroidBridge) window.AndroidBridge.minimizeApp(true);
+            if (window.AndroidBridge && window.AndroidBridge.minimizeApp) {
+                window.AndroidBridge.minimizeApp(true);
+            }
         };
-        document.getElementById("closeBtn").onclick = () => { if (window.AndroidBridge) window.AndroidBridge.closeApp(); };
 
-        // 膠囊工具欄拖拽邏輯
-        toolbar.querySelectorAll('.group[id]').forEach(group => {
-            const handle = group.querySelector('.drag-handle');
+        document.getElementById("closeBtn").onclick = () => {
+            if (window.AndroidBridge && window.AndroidBridge.closeApp) {
+                window.AndroidBridge.closeApp();
+            }
+        };
 
-            handle.addEventListener('touchstart', (e) => {
-                if (e.target.tagName.toLowerCase() === 'input') return;
-                draggingGroup = group;
-                group.classList.add('dragging');
-            }, { passive: true });
+        Object.values(zones).forEach(z => setupSandboxEvents(z));
 
-            handle.addEventListener('touchmove', (e) => {
-                if (!draggingGroup) return;
-                const touch = e.touches[0];
-                const targetNode = document.elementFromPoint(touch.clientX, touch.clientY);
-                if (!targetNode) return;
-
-                const targetGroup = targetNode.closest('.group[id]');
-                if (targetGroup && targetGroup !== draggingGroup) {
-                    const box = targetGroup.getBoundingClientRect();
-                    const nextSibling = (touch.clientX < box.left + box.width / 2) ? targetGroup : targetGroup.nextElementSibling;
-
-                    if (nextSibling !== draggingGroup) {
-                        toolbar.insertBefore(draggingGroup, nextSibling);
-                    }
-                }
-            }, { passive: true });
-
-            const endDrag = () => {
-                if (!draggingGroup) return;
-                draggingGroup.classList.remove('dragging');
-                draggingGroup = null;
-
-                const newOrder = [...toolbar.querySelectorAll('.group')].map(el => el.id).filter(id => id);
-                localStorage.setItem('toolbar_groups_order', JSON.stringify(newOrder));
-            };
-
-            handle.addEventListener('touchend', endDrag);
-            handle.addEventListener('touchcancel', endDrag);
-        });
-
-        const savedOrder = localStorage.getItem('toolbar_groups_order');
-        if (savedOrder) {
-            JSON.parse(savedOrder).forEach(id => {
-                const node = document.getElementById(id);
-                if (node) toolbar.appendChild(node);
-            });
-            const controlGroup = toolbar.querySelector('.group:not([id])');
-            if (controlGroup) toolbar.appendChild(controlGroup);
-        }
-
-        canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
-        canvas.addEventListener("pointermove", onPointerMove, { passive: false });
-        canvas.addEventListener("pointerup", onPointerUp, { passive: false });
-        canvas.addEventListener("pointercancel", onPointerUp, { passive: false });
-
-        // 💡 额外生命周期守卫：原生切后台系统通知时强制洗牌状态
-        window.addEventListener("blur", forceResetAllStates);
-        document.addEventListener("visibilitychange", () => { if (document.hidden) forceResetAllStates(); });
         window.addEventListener("resize", resizeCanvas);
+        window.addEventListener("orientationchange", () => setTimeout(resizeCanvas, 200));
 
-        resizeCanvas();
-        centerView();
+        // 初始化弹出面板的滑块位置
+        syncPopupToState();
+
+        setTimeout(resizeCanvas, 100);
     })();
 </script>
 </body>

@@ -273,7 +273,7 @@
             filter: brightness(0.9);
         }
 
-        /* 小三角指示器（指向颜色组） */
+        /* 小三角指示器 */
         .size-popup::before {
             content: '';
             position: absolute;
@@ -288,9 +288,10 @@
             border-radius: 2px;
         }
 
-        /* 双沙盒联动的物理主容器 */
+        /* 💡 核心调整：主容器由左右排列调整为上下纵向排列 */
         .main-container {
             display: flex;
+            flex-direction: column; /* 纵向切分上下分屏 */
             width: 100vw;
             height: 100vh;
             background: transparent !important;
@@ -298,8 +299,9 @@
             position: relative;
         }
 
+        /* 💡 核心调整：视口宽度拉满，高度由 JS 分配比例支配 */
         .zone-viewport {
-            height: 100%;
+            width: 100%;
             position: relative;
             overflow: hidden;
             background: transparent !important;
@@ -307,21 +309,22 @@
             transition: box-shadow 0.4s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
+        /* 💡 核心调整：激活态内阴影方向适配上下分屏 */
         #zone-a.active {
-            box-shadow: inset -20px 0 40px -15px rgba(37, 99, 235, 0.05);
+            box-shadow: inset 0 -20px 40px -15px rgba(37, 99, 235, 0.05);
         }
 
         #zone-b.active {
-            box-shadow: inset 20px 0 40px -15px rgba(37, 99, 235, 0.05);
+            box-shadow: inset 0 20px 40px -15px rgba(37, 99, 235, 0.05);
         }
 
-        /* 高級強觀察分屏調節條 */
+        /* 💡 核心调整：分屏调节条从竖拉杆重组为横向拉杆 */
         .resizer-bar {
-            width: 32px;
-            margin: 0 -16px;
-            height: 100%;
+            width: 100%;
+            height: 32px; /* 增大高度轴作为物理触控热区 */
+            margin: -16px 0; /* 上下内缩以完美居中 */
             z-index: 100;
-            cursor: col-resize;
+            cursor: row-resize; /* 鼠标样式变为上下调节 */
             background: transparent;
             position: relative;
             flex-shrink: 0;
@@ -331,18 +334,20 @@
             align-items: center;
         }
 
+        /* 💡 核心调整：内部装饰胶囊结构改为扁平横向 */
         .resizer-bar::after {
             content: '';
-            width: 4px;
-            height: 48px;
+            width: 48px;
+            height: 4px;
             background: rgba(37, 99, 235, 0.5);
             border-radius: 999px;
             transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
+        /* 💡 核心调整：横向拉杆激活拖拽态的高亮发光行为适配 */
         .resizer-bar.active-drag::after {
-            height: 120px;
-            width: 8px;
+            width: 120px;
+            height: 8px;
             background: #2563eb;
             box-shadow: 0 0 16px rgba(37, 99, 235, 0.8);
         }
@@ -415,8 +420,6 @@
             <div class="color" data-color="#ffffff" style="background:#ffffff; border: 2px solid #ddd;"></div>
         </div>
 
-        <!-- 原 group-sizes 已移除，改为弹出面板 -->
-
         <div class="group" id="group-history">
             <div class="drag-handle">⋮</div>
             <button id="undoBtn">↩️ 撤销</button>
@@ -432,13 +435,12 @@
         </div>
     </div>
 
-    <!-- 弹出式画笔大小选择面板 -->
     <div class="size-popup" id="sizePopup">
         <div class="size-popup-header">
             <label class="size-popup-label" for="popupSizeSlider">🖌 画笔大小</label>
             <span class="size-popup-value">
-                    <span id="popupSizeNum">2</span><span class="unit">px</span>
-                </span>
+                <span id="popupSizeNum">2</span><span class="unit">px</span>
+            </span>
         </div>
         <div class="size-popup-slider-container">
             <input type="range" id="popupSizeSlider" min="0" max="3" value="0" step="1" />
@@ -488,8 +490,6 @@
         const resizerBar = document.getElementById("resizerBar");
         const zoneA = document.getElementById("zone-a");
         const zoneB = document.getElementById("zone-b");
-
-        // 弹出面板相关元素
         const sizePopup = document.getElementById("sizePopup");
         const popupSizeSlider = document.getElementById("popupSizeSlider");
         const popupSizeNum = document.getElementById("popupSizeNum");
@@ -497,20 +497,13 @@
         const groupColors = document.getElementById("group-colors");
 
         let draggingGroup = null;
-
-        // 初始分屏比例為黃金分割比例 0.618
-        let splitRatio = 0.618;
-
-        // 4档离散大小绝对值映射表
+        let splitRatio = 0.618; // 初始分屏比例为黄金分割
         const SIZE_STEPS = [2, 4, 8, 16];
-
         let toolbarState = {
             mode: "pen",
             color: "#000000",
-            size: SIZE_STEPS[0] // 默认 2px
+            size: SIZE_STEPS[0]
         };
-
-        // 弹出面板显示状态
         let isPopupVisible = false;
 
         const zones = {
@@ -557,7 +550,6 @@
                 eraserCursor: null
             }
         };
-
         let activeZoneId = 'a';
 
         function switchActiveZone(zoneId) {
@@ -578,14 +570,9 @@
             const stepIndex = getSizeStepIndex(toolbarState.size);
             popupSizeSlider.value = stepIndex;
             popupSizeNum.textContent = toolbarState.size;
-            // 更新预设圆点状态
             document.querySelectorAll('.size-preset-dot').forEach(dot => {
                 const dotIndex = parseInt(dot.getAttribute('data-size-index'), 10);
-                if (dotIndex === stepIndex) {
-                    dot.classList.add('active-preset');
-                } else {
-                    dot.classList.remove('active-preset');
-                }
+                dot.classList.toggle('active-preset', dotIndex === stepIndex);
             });
         }
 
@@ -613,12 +600,9 @@
             const colorGroupRect = groupColors.getBoundingClientRect();
             const popupWidth = sizePopup.offsetWidth || 200;
             const popupHeight = sizePopup.offsetHeight || 130;
-
-            // 默认将弹出面板放在颜色组下方，左对齐颜色组
             let top = colorGroupRect.bottom + 10;
             let left = colorGroupRect.left;
 
-            // 边界检查：右侧不超出viewport
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
             if (left + popupWidth > viewportWidth - 12) {
@@ -628,10 +612,8 @@
                 left = 12;
             }
 
-            // 边界检查：下方空间不足则放到颜色组上方
             if (top + popupHeight > viewportHeight - 20) {
                 top = colorGroupRect.top - popupHeight - 10;
-                // 如果上方也不够，则贴近顶部
                 if (top < 8) {
                     top = 8;
                 }
@@ -640,10 +622,9 @@
             sizePopup.style.top = top + 'px';
             sizePopup.style.left = left + 'px';
 
-            // 更新小三角位置（使其指向颜色组中心）
             const arrowLeft = Math.max(16, Math.min(colorGroupRect.left + colorGroupRect.width / 2 - left - 7, popupWidth - 30));
             sizePopup.style.setProperty('--arrow-left', arrowLeft + 'px');
-            // 动态调整 ::before 的 left
+
             const styleId = 'popup-arrow-style';
             let styleEl = document.getElementById(styleId);
             if (!styleEl) {
@@ -654,19 +635,16 @@
             styleEl.textContent = `.size-popup::before { left: ${arrowLeft}px !important; }`;
         }
 
-        // 弹出面板滑块事件
         popupSizeSlider.addEventListener('input', (e) => {
             const stepIndex = parseInt(e.target.value, 10);
             toolbarState.size = SIZE_STEPS[stepIndex];
             popupSizeNum.textContent = toolbarState.size;
-            // 同步预设圆点
             document.querySelectorAll('.size-preset-dot').forEach(dot => {
                 const dotIndex = parseInt(dot.getAttribute('data-size-index'), 10);
                 dot.classList.toggle('active-preset', dotIndex === stepIndex);
             });
         });
 
-        // 预设圆点点击事件
         sizePresetsContainer.addEventListener('click', (e) => {
             const dot = e.target.closest('.size-preset-dot');
             if (!dot) return;
@@ -680,7 +658,6 @@
             });
         });
 
-        // 阻止弹出面板内的点击冒泡到document（防止误关闭）
         sizePopup.addEventListener('pointerdown', (e) => {
             e.stopPropagation();
         });
@@ -688,19 +665,18 @@
             e.stopPropagation();
         });
 
-        // 工具栏滚动时关闭弹出面板
         mainToolbar.addEventListener('scroll', () => {
             if (isPopupVisible) {
                 hideSizePopup();
             }
         }, { passive: true });
 
-        // window resize / orientationchange 时关闭弹出面板
         window.addEventListener('resize', () => {
             if (isPopupVisible) {
                 hideSizePopup();
             }
         });
+
         window.addEventListener('orientationchange', () => {
             if (isPopupVisible) {
                 hideSizePopup();
@@ -708,74 +684,63 @@
             setTimeout(resizeCanvas, 200);
         });
 
-        // document级点击：点击弹出面板和颜色按钮之外的地方关闭面板
         document.addEventListener('click', (e) => {
             if (!isPopupVisible) return;
-            // 检查点击是否在弹出面板内
             if (sizePopup.contains(e.target)) return;
-            // 检查点击是否在颜色按钮上
             if (e.target.closest('.color') && e.target.closest('#group-colors')) return;
-            // 检查点击是否在颜色组的drag-handle上
             if (e.target.closest('#group-colors .drag-handle')) return;
-            // 其他情况关闭面板
             hideSizePopup();
         });
 
-        // 颜色按钮点击事件（修改：集成弹出面板显示）
         document.querySelectorAll("#group-colors .color").forEach((el) => {
             el.addEventListener('click', (e) => {
-                // 切换颜色
-                document.querySelectorAll("#group-colors .color").forEach((c) => c.classList
-                    .remove("active"));
+                document.querySelectorAll("#group-colors .color").forEach((c) => c.classList.remove("active"));
                 el.classList.add("active");
                 toolbarState.color = el.getAttribute("data-color");
 
-                // 显示弹出面板（如果已隐藏）
                 if (!isPopupVisible) {
                     showSizePopup();
                 } else {
-                    // 如果已显示，更新位置（颜色组可能因滚动而移动）
                     positionPopup();
                 }
             });
         });
 
+        // 💡 核心重构：将原本计算横向宽度的逻辑修改为适配上下分屏计算高度
         function resizeCanvas() {
-            const totalWidth = window.innerWidth;
-            const height = window.innerHeight;
-            if (totalWidth <= 0 || height <= 0) return;
+            const width = window.innerWidth;
+            const totalHeight = window.innerHeight; // 抓取全局视口高度
+            if (width <= 0 || totalHeight <= 0) return;
 
-            const widthA = totalWidth * splitRatio;
-            const widthB = totalWidth * (1 - splitRatio);
+            // 根据上下比例重新划分两区的高度
+            const heightA = totalHeight * splitRatio;
+            const heightB = totalHeight * (1 - splitRatio);
 
-            zoneA.style.flex = `0 0 ${widthA}px`;
-            zoneB.style.flex = `0 0 ${widthB}px`;
+            zoneA.style.flex = `0 0 ${heightA}px`;
+            zoneB.style.flex = `0 0 ${heightB}px`;
 
             Object.values(zones).forEach(z => {
-                const currentWidth = z.id === 'a' ? widthA : widthB;
+                const currentHeight = z.id === 'a' ? heightA : heightB;
 
-                z.canvas.width = currentWidth * DPR;
-                z.canvas.height = height * DPR;
-                z.canvas.style.width = currentWidth + "px";
-                z.canvas.style.height = height + "px";
+                z.canvas.width = width * DPR;
+                z.canvas.height = currentHeight * DPR;
+                z.canvas.style.width = width + "px";
+                z.canvas.style.height = currentHeight + "px";
 
                 requestRender(z);
             });
 
-            // 如果弹出面板可见，更新其位置
             if (isPopupVisible) {
                 requestAnimationFrame(() => positionPopup());
             }
         }
         window.resizeCanvas = resizeCanvas;
 
-        // 💡 核心重构：弃用 touchstart/touchmove，升级为全指针捕获的高级精准触控生命周期
+        // 💡 核心重构：上下拖拉分配条，捕捉 Y 轴移动距离
         resizerBar.addEventListener('pointerdown', (e) => {
             if (!e.isPrimary) return;
             forceResetAllStates();
-
             resizerBar.classList.add('active-drag');
-
             try {
                 resizerBar.setPointerCapture(e.pointerId);
             } catch (_) {}
@@ -784,10 +749,10 @@
         resizerBar.addEventListener('pointermove', (e) => {
             if (!resizerBar.classList.contains('active-drag')) return;
 
-            const touchX = e.clientX;
-            const totalWidth = window.innerWidth;
+            const touchY = e.clientY; // 捕获触控点的高度位置
+            const totalHeight = window.innerHeight;
 
-            let newRatio = touchX / totalWidth;
+            let newRatio = touchY / totalHeight;
             if (newRatio < 0.2) newRatio = 0.2;
             if (newRatio > 0.8) newRatio = 0.8;
 
@@ -803,7 +768,6 @@
                 } catch (_) {}
             }
         };
-
         resizerBar.addEventListener('pointerup', endResizeDrag);
         resizerBar.addEventListener('pointercancel', endResizeDrag);
 
@@ -847,7 +811,6 @@
             ctx.lineJoin = "round";
             ctx.strokeStyle = stroke.color;
             ctx.lineWidth = stroke.size;
-
             ctx.shadowBlur = 0;
 
             ctx.beginPath();
@@ -873,19 +836,20 @@
         }
 
         function pointToLineDistance(px, py, x1, y1, x2, y2) {
-            const A = px - x1,
-                B = py - y1,
-                C = x2 - x1,
-                D = y2 - y1;
+            const A = px - x1, B = py - y1, C = x2 - x1, D = y2 - y1;
             const dot = A * C + B * D;
             const lenSq = C * C + D * D;
             let param = -1;
             if (lenSq !== 0) param = dot / lenSq;
             let xx, yy;
-            if (param < 0) { xx = x1;
-                yy = y1; } else if (param > 1) { xx = x2;
-                yy = y2; } else { xx = x1 + param * C;
-                yy = y1 + param * D; }
+            if (param < 0) {
+                xx = x1; yy = y1;
+            } else if (param > 1) {
+                xx = x2; yy = y2;
+            } else {
+                xx = x1 + param * C;
+                yy = y1 + param * D;
+            }
             return Math.hypot(px - xx, py - yy);
         }
 
@@ -905,8 +869,7 @@
                 }
 
                 if (stroke.points.length === 1) {
-                    if (Math.hypot(worldPoint.x - stroke.points[0].x, worldPoint.y - stroke.points[0].y) <=
-                        eraserRadius) {
+                    if (Math.hypot(worldPoint.x - stroke.points[0].x, worldPoint.y - stroke.points[0].y) <= eraserRadius) {
                         const removed = zone.strokes.splice(i, 1)[0];
                         zone.undoStack.push({ type: "erase", stroke: removed, index: i });
                         zone.redoStack = [];
@@ -916,8 +879,7 @@
                 }
 
                 for (let j = 0; j < stroke.points.length - 1; j++) {
-                    if (pointToLineDistance(worldPoint.x, worldPoint.y, stroke.points[j].x, stroke.points[j].y, stroke
-                            .points[j + 1].x, stroke.points[j + 1].y) <= eraserRadius) {
+                    if (pointToLineDistance(worldPoint.x, worldPoint.y, stroke.points[j].x, stroke.points[j].y, stroke.points[j + 1].x, stroke.points[j + 1].y) <= eraserRadius) {
                         const removed = zone.strokes.splice(i, 1)[0];
                         zone.undoStack.push({ type: "erase", stroke: removed, index: i });
                         zone.redoStack = [];
@@ -930,7 +892,6 @@
         }
 
         const renderFlags = { a: false, b: false };
-
         function requestRender(zone) {
             if (renderFlags[zone.id]) return;
             renderFlags[zone.id] = true;
@@ -984,7 +945,6 @@
 
         function setupSandboxEvents(zone) {
             const el = zone.canvas;
-
             el.addEventListener("pointerdown", (e) => {
                 switchActiveZone(zone.id);
                 zone.pointers.set(e.pointerId, e);
@@ -999,8 +959,7 @@
                         zone.eraserCursor = world;
                         eraseStrokesAt(world, zone);
                     } else {
-                        zone.currentStroke = { type: "pen", color: toolbarState.color, size: toolbarState.size,
-                            points: [world] };
+                        zone.currentStroke = { type: "pen", color: toolbarState.color, size: toolbarState.size, points: [world] };
                         requestRender(zone);
                     }
                     return;
@@ -1015,11 +974,9 @@
                         zone.eraserCursor = null;
 
                         const pts = touchPointers;
-                        zone.pinchStartDist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1]
-                            .clientY);
+                        zone.pinchStartDist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
                         zone.pinchStartScale = zone.scale;
-                        zone.pinchStartCenter = { x: (pts[0].clientX + pts[1].clientX) / 2, y: (pts[0].clientY + pts[
-                                1].clientY) / 2 };
+                        zone.pinchStartCenter = { x: (pts[0].clientX + pts[1].clientX) / 2, y: (pts[0].clientY + pts[1].clientY) / 2 };
                         zone.pinchStartOffset = { x: zone.offsetX, y: zone.offsetY };
                     } else {
                         zone.isDrawing = false;
@@ -1048,21 +1005,16 @@
                 }
 
                 const touchPointers = [...zone.pointers.values()].filter(p => p.pointerType === "touch");
-
                 if (touchPointers.length >= 2) {
                     const pts = touchPointers;
                     const dist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
                     let newScale = zone.pinchStartScale * (dist / (zone.pinchStartDist || 1));
                     newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
 
-                    const currentCenter = { x: (pts[0].clientX + pts[1].clientX) / 2, y: (pts[0].clientY + pts[1]
-                            .clientY) / 2 };
+                    const currentCenter = { x: (pts[0].clientX + pts[1].clientX) / 2, y: (pts[0].clientY + pts[1].clientY) / 2 };
                     const rect = zone.canvas.getBoundingClientRect();
-                    const originTransformX = (zone.pinchStartCenter.x - rect.left - zone.pinchStartOffset.x) / zone
-                        .pinchStartScale;
-                    const originTransformY = (zone.pinchStartCenter.y - rect.top - zone.pinchStartOffset.y) / zone
-                        .pinchStartScale;
-
+                    const originTransformX = (zone.pinchStartCenter.x - rect.left - zone.pinchStartOffset.x) / zone.pinchStartScale;
+                    const originTransformY = (zone.pinchStartCenter.y - rect.top - zone.pinchStartOffset.y) / zone.pinchStartScale;
                     zone.scale = newScale;
                     zone.offsetX = (currentCenter.x - rect.left) - originTransformX * zone.scale;
                     zone.offsetY = (currentCenter.y - rect.top) - originTransformY * zone.scale;
@@ -1085,14 +1037,11 @@
                             requestRender(zone);
                         }
                     } else if (zone.touchStartPoint) {
-                        const moveDist = Math.hypot(e.clientX - zone.touchStartPoint.clientX, e.clientY - zone
-                            .touchStartPoint.clientY);
+                        const moveDist = Math.hypot(e.clientX - zone.touchStartPoint.clientX, e.clientY - zone.touchStartPoint.clientY);
                         if (moveDist >= TOUCH_START_THRESHOLD) {
                             try { el.setPointerCapture(e.pointerId); } catch (_) {}
                             zone.isDrawing = true;
-
-                            const startWorld = screenToWorld(zone.touchStartPoint.clientX, zone.touchStartPoint
-                                .clientY, zone);
+                            const startWorld = screenToWorld(zone.touchStartPoint.clientX, zone.touchStartPoint.clientY, zone);
                             const currentWorld = screenToWorld(e.clientX, e.clientY, zone);
 
                             if (toolbarState.mode === "eraser") {
@@ -1141,9 +1090,9 @@
             const action = z.undoStack.pop();
             z.redoStack.push(action);
 
-            if (action.type === "add") { z.strokes.pop(); } else if (action.type === "erase") { z.strokes.splice(action
-                    .index, 0, action.stroke); } else if (action.type === "clear") { z.strokes = [...action
-                    .oldStrokes]; }
+            if (action.type === "add") { z.strokes.pop(); }
+            else if (action.type === "erase") { z.strokes.splice(action.index, 0, action.stroke); }
+            else if (action.type === "clear") { z.strokes = [...action.oldStrokes]; }
             requestRender(z);
         }
 
@@ -1153,8 +1102,9 @@
             const action = z.redoStack.pop();
             z.undoStack.push(action);
 
-            if (action.type === "add") { z.strokes.push(action.stroke); } else if (action.type === "erase") { z.strokes
-                    .splice(action.index, 1); } else if (action.type === "clear") { z.strokes = []; }
+            if (action.type === "add") { z.strokes.push(action.stroke); }
+            else if (action.type === "erase") { z.strokes.splice(action.index, 1); }
+            else if (action.type === "clear") { z.strokes = []; }
             requestRender(z);
         }
 
@@ -1208,9 +1158,7 @@
         window.addEventListener("resize", resizeCanvas);
         window.addEventListener("orientationchange", () => setTimeout(resizeCanvas, 200));
 
-        // 初始化弹出面板的滑块位置
         syncPopupToState();
-
         setTimeout(resizeCanvas, 100);
     })();
 </script>

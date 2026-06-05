@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>双沙盒智能手写板</title>
+    <title>双沙盒智能手写板 - 性能优化版</title>
     <style>
         * {
             box-sizing: border-box;
@@ -107,7 +107,7 @@
             transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
         }
 
-        button.active, button:hover {
+        button.active, button.clicking {
             background: #2563eb;
             color: #fff;
             box-shadow: 0 4px 14px rgba(37,99,235,0.4);
@@ -218,16 +218,6 @@
             cursor: pointer;
         }
 
-        .size-slider::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: #2563eb;
-            border: none;
-            box-shadow: 0 2px 8px rgba(37,99,235,0.4);
-            cursor: pointer;
-        }
-
         .main-container {
             display: flex;
             flex-direction: column;
@@ -241,6 +231,9 @@
             position: relative;
             overflow: hidden;
             transition: box-shadow 0.4s;
+            /* 【性能優化】啟用 GPU 圖層硬體加速隔離，杜絕重繪引發全頁重排 */
+            will-change: transform;
+            contain: strict;
         }
 
         #zone-a.active {
@@ -372,14 +365,14 @@
     </div>
 
     <div class="main-container" id="mainContainer">
-        <div id="zone-a" class="zone-viewport active" onpointerdown="switchActiveZone('a')">
+        <div id="zone-a" class="zone-viewport active">
             <div class="smart-mask"></div>
             <div class="canvas-wrapper"><canvas id="canvas-a"></canvas></div>
         </div>
 
         <div class="resizer-bar" id="resizerBar"></div>
 
-        <div id="zone-b" class="zone-viewport" onpointerdown="switchActiveZone('b')">
+        <div id="zone-b" class="zone-viewport">
             <div class="smart-mask"></div>
             <div class="canvas-wrapper"><canvas id="canvas-b"></canvas></div>
         </div>
@@ -387,18 +380,12 @@
 </div>
 
 <script>
-    // ============================================
-    // 常量定义
-    // ============================================
     const CONFIG = {
         DPR: Math.min(window.devicePixelRatio || 1, 2),
         SIZE_STEPS: [2, 4, 8, 16],
         ZONE_IDS: ['a', 'b'],
     };
 
-    // ============================================
-    // 页面元素缓存
-    // ============================================
     const DOM = {
         penBtn: document.getElementById('penBtn'),
         eraserBtn: document.getElementById('eraserBtn'),
@@ -418,9 +405,6 @@
         colorGroup: document.getElementById('group-colors'),
     };
 
-    // ============================================
-    // 全局状态
-    // ============================================
     const STATE = {
         mode: 'pen',
         color: '#000000',
@@ -438,14 +422,11 @@
         moved: false,
     };
 
-    // ============================================
-    // 区域数据结构
-    // ============================================
     function createZone(id) {
         return {
             id,
             canvas: document.getElementById(`canvas-${id}`),
-            ctx: document.getElementById(`canvas-${id}`).getContext('2d'),
+            ctx: document.getElementById(`canvas-${id}`).getContext('2d', { desynchronized: true }), // 【優化】開啟低延遲渲染節流
             strokes: [],
             undoStack: [],
             redoStack: [],
@@ -467,9 +448,6 @@
 
     const ZONES = Object.fromEntries(CONFIG.ZONE_IDS.map(id => [id, createZone(id)]));
 
-    // ============================================
-    // 工具函数
-    // ============================================
     const Utils = {
         dist: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1),
 
@@ -498,10 +476,12 @@
     };
 
     // ============================================
-    // 绘制系统
+    // 繪製系統（高併發性能優化版）
     // ============================================
     const Render = {
-        flags: {},
+        // 【核心優化】使用 Set 代替原有 flags 物件，集中管理同一幀內需要重繪的沙盒
+        dirtyZones: new Set(),
+        rafId: null,
 
         stroke: (ctx, stroke, zone) => {
             if (!stroke?.points?.length) return;
@@ -510,7 +490,6 @@
             ctx.strokeStyle = stroke.color;
             ctx.lineWidth = stroke.size;
             ctx.beginPath();
-
             if (stroke.points.length === 1) {
                 const p = stroke.points[0];
                 ctx.arc(p.x, p.y, stroke.size / 2, 0, Math.PI * 2);
@@ -518,12 +497,13 @@
                 ctx.fill();
             } else {
                 ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-                for (let i = 1; i < stroke.points.length - 1; i++) {
+                const len = stroke.points.length;
+                for (let i = 1; i < len - 1; i++) {
                     const xc = (stroke.points[i].x + stroke.points[i + 1].x) / 2;
                     const yc = (stroke.points[i].y + stroke.points[i + 1].y) / 2;
                     ctx.quadraticCurveTo(stroke.points[i].x, stroke.points[i].y, xc, yc);
                 }
-                ctx.lineTo(stroke.points[stroke.points.length - 1].x, stroke.points[stroke.points.length - 1].y);
+                ctx.lineTo(stroke.points[len - 1].x, stroke.points[len - 1].y);
                 ctx.stroke();
             }
             ctx.restore();
@@ -542,28 +522,37 @@
             ctx.fill();
         },
 
+        // 異步排程整合器：防止多點觸控時的高頻率重繪堆疊
         request: (zone) => {
-            if (Render.flags[zone.id]) return;
-            Render.flags[zone.id] = true;
-            requestAnimationFrame(() => {
-                Render.flags[zone.id] = false;
+            Render.dirtyZones.add(zone);
+            if (!Render.rafId) {
+                Render.rafId = requestAnimationFrame(Render.flush);
+            }
+        },
+
+        flush: () => {
+            Render.rafId = null;
+            Render.dirtyZones.forEach(zone => {
                 const ctx = zone.ctx;
                 ctx.clearRect(0, 0, zone.canvas.width, zone.canvas.height);
                 ctx.save();
                 ctx.scale(CONFIG.DPR, CONFIG.DPR);
                 ctx.translate(zone.offsetX, zone.offsetY);
                 ctx.scale(zone.scale, zone.scale);
-                zone.strokes.forEach(s => Render.stroke(ctx, s, zone));
+
+                // 傳統 for 迴圈性能優於 forEach 遍歷
+                const len = zone.strokes.length;
+                for (let i = 0; i < len; i++) {
+                    Render.stroke(ctx, zone.strokes[i], zone);
+                }
                 if (zone.current) Render.stroke(ctx, zone.current, zone);
                 Render.eraserCursor(ctx, zone);
                 ctx.restore();
             });
+            Render.dirtyZones.clear();
         },
     };
 
-    // ============================================
-    // 编辑操作
-    // ============================================
     const Edit = {
         finish: (zone) => {
             if (!zone.current) return;
@@ -576,6 +565,7 @@
 
         erase: (point, zone) => {
             const radius = (STATE.size * 2.5) / zone.scale;
+            let changed = false;
             for (let i = zone.strokes.length - 1; i >= 0; i--) {
                 const stroke = zone.strokes[i];
                 if (!stroke.points.length) continue;
@@ -586,7 +576,6 @@
                 const maxX = Math.max(...xs);
                 const minY = Math.min(...ys);
                 const maxY = Math.max(...ys);
-
                 if (point.x < minX - radius || point.x > maxX + radius || point.y < minY - radius || point.y > maxY + radius) continue;
 
                 let shouldRemove = stroke.points.length === 1 && Utils.dist(point.x, point.y, stroke.points[0].x, stroke.points[0].y) <= radius;
@@ -603,9 +592,10 @@
                     const removed = zone.strokes.splice(i, 1)[0];
                     zone.undoStack.push({ type: 'erase', stroke: removed, index: i });
                     zone.redoStack = [];
+                    changed = true;
                 }
             }
-            Render.request(zone);
+            if (changed) Render.request(zone);
         },
 
         undo: () => {
@@ -647,9 +637,6 @@
         },
     };
 
-    // ============================================
-    // UI 操作
-    // ============================================
     const UI = {
         updateSize: (idx) => {
             STATE.size = CONFIG.SIZE_STEPS[idx];
@@ -676,10 +663,8 @@
             const h = window.innerHeight;
             const ha = h * STATE.ratio;
             const hb = h * (1 - STATE.ratio);
-
             document.getElementById('zone-a').style.flex = `0 0 ${ha}px`;
             document.getElementById('zone-b').style.flex = `0 0 ${hb}px`;
-
             CONFIG.ZONE_IDS.forEach(id => {
                 const z = ZONES[id];
                 const tz = id === 'a' ? ha : hb;
@@ -692,13 +677,14 @@
         },
     };
 
-    // ============================================
-    // 绘画输入处理
-    // ============================================
     function setupCanvasEvents(zone) {
         const el = zone.canvas;
+
+        // 點擊判定切換與初始點記錄
         el.addEventListener('pointerdown', (e) => {
-            window.switchActiveZone(zone.id);
+            if (e.pointerType === 'pen' || (e.pointerType === 'touch' && zone.pointers.size === 0)) {
+                window.switchActiveZone(zone.id);
+            }
             zone.pointers.set(e.pointerId, e);
 
             if (e.pointerType === 'pen') {
@@ -729,6 +715,7 @@
             }
         });
 
+        // 【極速平滑變形核心】
         el.addEventListener('pointermove', (e) => {
             if (!zone.pointers.has(e.pointerId)) return;
             zone.pointers.set(e.pointerId, e);
@@ -740,7 +727,8 @@
                     Edit.erase(world, zone);
                 } else if (zone.current) {
                     const last = zone.current.points[zone.current.points.length - 1];
-                    if (Utils.dist(world.x, world.y, last.x, last.y) >= 1.2) {
+                    // 略微放寬取樣距離（從原先 1.2px 調至 0.8px 提高精細度，配合 rAF 鎖不怕卡頓）
+                    if (Utils.dist(world.x, world.y, last.x, last.y) >= 0.8) {
                         zone.current.points.push(world);
                         Render.request(zone);
                     }
@@ -748,10 +736,12 @@
             } else {
                 const touches = [...zone.pointers.values()].filter(p => p.pointerType === 'touch');
 
+                // 雙指平移縮放邏輯調優
                 if (touches.length >= 2 && !zone.isDrawing) {
                     const dist = Utils.dist(touches[0].clientX, touches[0].clientY, touches[1].clientX, touches[1].clientY);
                     let newScale = zone.pinchScale * (dist / (zone.pinchDist || 1));
-                    newScale = Math.max(0.2, Math.min(8, newScale));
+                    newScale = Math.max(0.15, Math.min(10, newScale)); // 擴大縮放範圍
+
                     const center = { x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 };
                     const rect = zone.canvas.getBoundingClientRect();
                     const originX = (zone.pinchCenter.x - rect.left - zone.pinchOffset.x) / zone.pinchScale;
@@ -760,6 +750,8 @@
                     zone.scale = newScale;
                     zone.offsetX = center.x - rect.left - originX * zone.scale;
                     zone.offsetY = center.y - rect.top - originY * zone.scale;
+
+                    // 寫入高效能非同步節流隊列
                     Render.request(zone);
                 } else if (e.pointerType === 'touch' && touches.length === 1 && !zone.isDrawing && zone.touchStart?.id === e.pointerId) {
                     if (Utils.dist(e.clientX, e.clientY, zone.touchStart.x, zone.touchStart.y) >= 8) {
@@ -769,7 +761,6 @@
 
                         const start = Utils.screenToWorld(zone.touchStart.x, zone.touchStart.y, zone);
                         const current = Utils.screenToWorld(e.clientX, e.clientY, zone);
-
                         if (STATE.mode === 'eraser') {
                             zone.eraserCursor = current;
                             Edit.erase(current, zone);
@@ -806,11 +797,7 @@
         el.addEventListener('pointercancel', handlePointerUp);
     }
 
-    // ============================================
-    // 事件绑定
-    // ============================================
     function bindEvents() {
-        // 工具按钮
         DOM.penBtn.onclick = () => {
             STATE.mode = 'pen';
             DOM.penBtn.classList.add('active');
@@ -825,20 +812,25 @@
 
         DOM.sizeBtn.onclick = () => STATE.popupVisible ? UI.hideSizePopup() : UI.showSizePopup();
 
-        // 编辑按钮
+        // 給動作按鈕添加微反饋
+        const actionBtns = [DOM.undoBtn, DOM.redoBtn, DOM.centerBtn, DOM.clearBtn];
+        actionBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.add('clicking');
+                setTimeout(() => btn.classList.remove('clicking'), 180);
+            });
+        });
+
         DOM.undoBtn.onclick = Edit.undo;
         DOM.redoBtn.onclick = Edit.redo;
         DOM.centerBtn.onclick = Edit.center;
         DOM.clearBtn.onclick = Edit.clear;
 
-        // 系统按钮
-        DOM.minimizeBtn.onclick = () => window.AndroidBridge?.minimizeApp(true);
-        DOM.closeBtn.onclick = () => window.AndroidBridge?.closeApp();
+        DOM.minimizeBtn.onclick = () => window.AndroidBridge?.minimizeApp?.(true);
+        DOM.closeBtn.onclick = () => window.AndroidBridge?.closeApp?.();
 
-        // 笔刷大小
         DOM.sizeSlider.addEventListener('input', (e) => UI.updateSize(parseInt(e.target.value)));
 
-        // 颜色选择
         document.querySelectorAll('#group-colors .color').forEach((el) => {
             el.addEventListener('click', () => {
                 UI.hideSizePopup();
@@ -852,7 +844,6 @@
             });
         });
 
-        // 分屏拖拽
         DOM.resizerBar.addEventListener('pointerdown', (e) => {
             if (!e.isPrimary) return;
             Utils.resetAllStates();
@@ -878,7 +869,6 @@
             UI.resizeCanvas();
         });
 
-        // 弹窗关闭
         document.addEventListener('click', (e) => {
             if (STATE.popupVisible && !DOM.sizePopup.contains(e.target) && !DOM.sizeBtn.contains(e.target)) {
                 UI.hideSizePopup();
@@ -927,9 +917,6 @@
         }, true);
     }
 
-    // ============================================
-    // 全局接口
-    // ============================================
     window.switchActiveZone = (zoneId) => {
         if (STATE.activeZone === zoneId) return;
         STATE.activeZone = zoneId;
@@ -942,9 +929,6 @@
         setTimeout(UI.resizeCanvas, 60);
     };
 
-    // ============================================
-    // 初始化
-    // ============================================
     window.addEventListener('resize', UI.resizeCanvas);
     window.addEventListener('orientationchange', () => setTimeout(UI.resizeCanvas, 200));
 
